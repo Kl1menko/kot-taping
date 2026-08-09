@@ -39,6 +39,15 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
   },
   robots: { index: true, follow: true },
+  // iOS не читає icons з маніфесту — потрібен окремий apple-touch-icon.
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Kotova",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({
