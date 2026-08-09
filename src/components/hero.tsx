@@ -11,7 +11,7 @@ export function Hero() {
         <div className="flex flex-col">
           <SiteHeader />
 
-          <div className="flex flex-1 flex-col justify-center px-5 pb-14 pt-10 md:px-10 md:pb-20 md:pt-16 lg:pl-[max(2.5rem,calc((100vw-1360px)/2+2.5rem))]">
+          <div className="flex flex-1 flex-col justify-center px-5 pb-14 pt-10 md:px-10 md:pb-20 md:pt-16 lg:pl-[var(--gutter-edge-sm)]">
             <Eyebrow>Естетичне тейпування</Eyebrow>
             <h1 className="mt-6 text-[40px] leading-[1.05] sm:text-[54px] lg:text-[68px]">
               Повертаємо тілу свіжість без ін&#39;єкцій

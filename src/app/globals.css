@@ -23,9 +23,37 @@
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Split sections run full-bleed, but their text column must line up with the
+   centred 1360px `Container`. These resolve to the container gutter until the
+   viewport passes 1360px, then grow with the leftover margin.
+
+   `100dvw` rather than `100vw`: the latter counts the classic scrollbar, which
+   overshoots by ~15px and pushes the page sideways. `min()` clamps the result
+   so a narrow viewport can never produce a padding wider than the screen. */
+:root {
+  --gutter-edge-sm: min(2.5rem, 100%);
+  --gutter-edge-lg: min(3.5rem, 100%);
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --gutter-edge-sm: max(2.5rem, calc((100dvw - 1360px) / 2 + 2.5rem));
+    --gutter-edge-lg: max(3.5rem, calc((100dvw - 1360px) / 2 + 3.5rem));
+  }
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
+  }
+
+  /* Nothing on the page is allowed to scroll the document sideways. The
+     horizontal strips that genuinely need to scroll (the services tabs) own
+     their own `overflow-x`, so clipping here only catches accidental spill. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   body {

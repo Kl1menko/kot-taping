@@ -93,8 +93,14 @@ export function Services() {
       </h2>
 
       {/* Numbered pill tabs from the reference. Six categories don't fit one
-          mobile row, so the strip scrolls horizontally instead of wrapping. */}
-      <div className="mt-10 -mx-5 overflow-x-auto px-5 md:mx-0 md:px-0">
+          mobile row, so the strip scrolls horizontally instead of wrapping.
+
+          The strip bleeds into the container gutter so the first and last pill
+          can sit flush with the screen edge while scrolling. `min-w-0` keeps
+          the `w-max` row from widening this flex/grid ancestor, and
+          `overscroll-x-contain` stops a swipe past the end from chaining out
+          to the document. */}
+      <div className="mt-10 -mx-5 min-w-0 overflow-x-auto overscroll-x-contain px-5 md:mx-0 md:overflow-x-visible md:px-0">
         <div
           role="tablist"
           aria-label="Категорії послуг"

@@ -45,7 +45,7 @@ export function SiteHeader() {
   }, [open]);
 
   return (
-    <header className="relative z-50 flex items-center justify-between px-5 py-6 md:px-10 md:py-8 lg:pl-[max(2.5rem,calc((100vw-1360px)/2+2.5rem))]">
+    <header className="relative z-50 flex items-center justify-between px-5 py-6 md:px-10 md:py-8 lg:pl-[var(--gutter-edge-sm)]">
       <Link href="/" className="flex items-center gap-3">
         <span
           className="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-white"

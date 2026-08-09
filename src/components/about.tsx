@@ -21,7 +21,7 @@ export function About() {
           />
         </div>
 
-        <div className="flex flex-col justify-center px-5 py-16 md:px-14 md:py-20 lg:pr-[max(3.5rem,calc((100vw-1360px)/2+3.5rem))]">
+        <div className="flex flex-col justify-center px-5 py-16 md:px-14 md:py-20 lg:pr-[var(--gutter-edge-lg)]">
           <SectionLabel>Про мене</SectionLabel>
 
           <h2 className="mt-8 max-w-[20ch] text-[30px] leading-[1.15] sm:text-[38px] lg:text-[44px]">

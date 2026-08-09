@@ -12,7 +12,7 @@ export function Booking() {
   return (
     <Card as="section" id="booking">
       <div className="grid lg:grid-cols-[1fr_1.15fr]">
-        <div className="flex flex-col justify-between bg-blush px-5 py-16 md:px-14 md:py-20 lg:pl-[max(3.5rem,calc((100vw-1360px)/2+3.5rem))]">
+        <div className="flex flex-col justify-between bg-blush px-5 py-16 md:px-14 md:py-20 lg:pl-[var(--gutter-edge-lg)]">
           <div>
             <SectionLabel>Запис</SectionLabel>
             <h2 className="mt-8 max-w-[18ch] text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]">
@@ -60,7 +60,7 @@ export function Booking() {
           </div>
         </div>
 
-        <div className="px-5 py-16 md:px-14 md:py-20 lg:pr-[max(3.5rem,calc((100vw-1360px)/2+3.5rem))]">
+        <div className="px-5 py-16 md:px-14 md:py-20 lg:pr-[var(--gutter-edge-lg)]">
           <BookingForm preselected={preselected} />
         </div>
       </div>
