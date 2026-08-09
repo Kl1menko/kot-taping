@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useBookingModal } from "./booking-modal";
 import {
   CATEGORIES,
@@ -22,11 +23,22 @@ function ServiceCard({ service }: { service: Service }) {
       <div
         className={`relative aspect-[4/5] overflow-hidden rounded-[20px] ${TONE_CLASS[service.tone]}`}
       >
-        <div className="absolute inset-0 grid place-items-center">
-          <span className="text-[13px] uppercase tracking-[0.18em] text-ink-muted">
-            Фото
-          </span>
-        </div>
+        <Image
+          src={`/images/services/${service.category}.jpg`}
+          alt=""
+          fill
+          // Дві колонки на планшеті, три на десктопі — інакше браузер тягнув би
+          // повнорозмірний файл під картку в 400px.
+          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          className="object-cover"
+        />
+
+        {/* Затемнення знизу: кнопка й ціна лежать поверх фото, і на світлому
+            знімку білий пілл інакше зливається з тлом. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/25 to-transparent"
+        />
 
         <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
           <button
@@ -76,7 +88,9 @@ function ServiceCard({ service }: { service: Service }) {
 }
 
 export function Services() {
-  const [active, setActive] = useState<ServiceCategory>("lymph-body");
+  // Перша категорія зі списку — щоб активна вкладка збігалася з тією, що
+  // стоїть ліворуч, а не була четвертою всередині стрічки.
+  const [active, setActive] = useState<ServiceCategory>(CATEGORIES[0].id);
   const visible = SERVICES.filter((s) => s.category === active);
 
   return (

@@ -1,6 +1,6 @@
 import { SERVICES } from "@/lib/services";
 import { CONTACTS, SOCIALS } from "@/lib/contacts";
-import { FAQ_ITEMS } from "./faq";
+import { FAQ_ITEMS } from "@/lib/content";
 
 /**
  * Schema.org markup. The street address is still missing — add `address` once

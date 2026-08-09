@@ -1,26 +1,5 @@
 import { Card, Container, SectionLabel } from "./ui";
-
-/** PLACEHOLDER — replace with real, permission-granted client reviews. */
-const REVIEWS = [
-  {
-    quote:
-      "Прийшла з набряками, які не сходили роками. Після четвертого сеансу вперше побачила свої вилиці.",
-    author: "Ірина",
-    detail: "курс «Обличчя»",
-  },
-  {
-    quote:
-      "Найбільше зачепило, що спершу пів години розпитували про сон і навантаження, а вже потім клеїли.",
-    author: "Марія",
-    detail: "лімфодренаж обличчя",
-  },
-  {
-    quote:
-      "Ноги до вечора були як колоди. Після курсу різниця така, що чоловік помітив раніше за мене.",
-    author: "Оксана",
-    detail: "курс «Тіло»",
-  },
-];
+import { TESTIMONIALS as REVIEWS } from "@/lib/content";
 
 export function Testimonials() {
   return (

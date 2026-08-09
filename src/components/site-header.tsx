@@ -69,6 +69,8 @@ export function SiteHeader() {
         </span>
       </Link>
 
+      {/* Соцмережі в десктопному меню не дублюємо — вони лишаються у
+          мобільній панелі та у футері. */}
       <div className="hidden items-center gap-8 md:flex">
         <nav aria-label="Головне меню" className="flex items-center gap-8">
           {NAV.map((item) => (
@@ -79,21 +81,6 @@ export function SiteHeader() {
             >
               {item.label}
             </Link>
-          ))}
-        </nav>
-
-        <nav aria-label="Соцмережі" className="flex items-center gap-1">
-          {SOCIALS.map((s) => (
-            <a
-              key={s.id}
-              href={s.href}
-              target="_blank"
-              rel="noreferrer noopener"
-              aria-label={`${s.label} — ${s.handle}`}
-              className="grid size-10 place-items-center rounded-full text-ink-muted transition-colors duration-200 hover:bg-canvas hover:text-ink"
-            >
-              <SocialIcon id={s.id} />
-            </a>
           ))}
         </nav>
       </div>
