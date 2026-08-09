@@ -9,6 +9,9 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // Чисті модулі (calendar, analytics, phone) виконуються і в Next, і напряму
+    // в Node під час `npm test`, а Node не добудовує розширення сам.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
