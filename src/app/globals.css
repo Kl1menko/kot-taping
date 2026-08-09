@@ -128,6 +128,19 @@
   }
 }
 
+/* Нижній лист адмінки. Виїзд знизу — на мобільному це основний жест;
+   на десктопі dialog центрується, тож зсув майже непомітний. */
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* No intro at all — show the page immediately. */
   .preloader {
