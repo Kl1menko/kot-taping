@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, SERVICES, formatPrice } from "@/lib/services";
-import { SOCIALS } from "@/lib/contacts";
+import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 
 const INITIAL: BookingState = { status: "idle" };
@@ -195,6 +195,25 @@ export function BookingForm({
                 </option>
               ))}
             </optgroup>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Кабінет" error={state.fieldErrors?.location}>
+        <select
+          name="location"
+          required
+          defaultValue=""
+          aria-invalid={Boolean(state.fieldErrors?.location)}
+          className={`${inputCls} cursor-pointer`}
+        >
+          <option value="" disabled>
+            Оберіть місто
+          </option>
+          {LOCATIONS.map((l) => (
+            <option key={l.slug} value={l.slug}>
+              {l.city} — {l.address}
+            </option>
           ))}
         </select>
       </Field>
