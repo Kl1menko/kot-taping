@@ -9,7 +9,7 @@ import {
 import { toDateTimeLocal } from "@/lib/calendar";
 import type { AppointmentWithRefs } from "@/lib/db/appointments";
 import type { LocationRow, ServiceRow } from "@/lib/db/types";
-import { INPUT_CLS } from "@/lib/form";
+import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
 import { Button } from "./ui";
 
 const INITIAL: AppointmentState = { status: "idle" };
@@ -171,7 +171,7 @@ export function AppointmentForm({
           type="datetime-local"
           required
           defaultValue={toDateTimeLocal(start)}
-          className={`${INPUT_CLS} cursor-pointer`}
+          className={`${INPUT_CLS} ${DATE_INPUT_CLS} cursor-pointer`}
         />
       </Field>
 

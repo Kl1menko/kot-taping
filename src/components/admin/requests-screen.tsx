@@ -14,7 +14,7 @@ import type { RequestWithService } from "@/lib/db/requests";
 import type { RequestStatus, ServiceRow } from "@/lib/db/types";
 import { Sheet } from "./sheet";
 import { Button, Chip, EmptyState, formatMoney } from "./ui";
-import { INPUT_CLS } from "@/lib/form";
+import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
 
 const FILTERS: { id: RequestStatus | "all"; label: string }[] = [
   { id: "new", label: "Нові" },
@@ -301,7 +301,7 @@ function RequestDetails({
               type="datetime-local"
               required
               defaultValue={toDateTimeLocal(suggested)}
-              className={`${INPUT_CLS} cursor-pointer`}
+              className={`${INPUT_CLS} ${DATE_INPUT_CLS} cursor-pointer`}
             />
           </label>
 

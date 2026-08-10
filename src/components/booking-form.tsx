@@ -6,7 +6,7 @@ import { submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, SERVICES, formatPrice } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
-import { INPUT_CLS } from "@/lib/form";
+import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
 
 const INITIAL: BookingState = { status: "idle" };
 
@@ -222,7 +222,7 @@ export function BookingForm({
           type="date"
           required
           aria-invalid={Boolean(state.fieldErrors?.date)}
-          className={`${INPUT_CLS} cursor-pointer`}
+          className={`${INPUT_CLS} ${DATE_INPUT_CLS} cursor-pointer`}
         />
       </Field>
 
