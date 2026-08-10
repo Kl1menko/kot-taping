@@ -12,20 +12,23 @@ export default function Loading() {
         <Bar className="h-5 w-28" />
       </div>
 
-      <SkeletonList rows={3} />
-
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Порядок і розміри повторюють page.tsx: інакше після завантаження
+          екран перебудовується й стрибає. */}
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
           <div
             key={i}
-            className="rounded-[var(--radius-tile)] bg-surface p-6"
+            className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 sm:flex-col sm:items-start sm:gap-2 sm:px-5 sm:py-4"
             aria-hidden="true"
           >
-            <Bar className="h-4 w-24" />
-            <Bar className="mt-4 h-9 w-16" />
+            <Bar className="h-4 w-20" />
+            <Bar className="h-6 w-8" />
           </div>
         ))}
       </div>
+
+      {/* Без обгортки з відступом — SkeletonList уже має власний mt-5. */}
+      <SkeletonList rows={3} />
     </SkeletonScreen>
   );
 }

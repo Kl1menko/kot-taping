@@ -40,6 +40,14 @@ async function counts() {
   };
 }
 
+/**
+ * Лічильник-плитка.
+ *
+ * Свідомо компактна: на телефоні цих плиток чотири в одну колонку, і з
+ * великими числами вони займали весь екран, відсуваючи головне — список на
+ * сьогодні — за межу видимості. Тут вони довідка, а не заголовок, тож число
+ * і підпис стоять в один рядок.
+ */
 function Tile({
   label,
   value,
@@ -52,10 +60,16 @@ function Tile({
   return (
     <Link
       href={href}
-      className="rounded-[var(--radius-tile)] bg-surface p-6 transition-colors duration-200 hover:bg-sand"
+      className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 transition-colors duration-200 hover:bg-sand sm:flex-col sm:items-start sm:gap-1 sm:px-5 sm:py-4"
     >
-      <p className="text-[14px] text-ink-muted">{label}</p>
-      <p className="tnum mt-3 text-[36px] leading-none">{value}</p>
+      {/* min-w-0 на підписі й shrink-0 на числі: у вузькій колонці довгий
+          підпис має переноситись усередині плитки, а не виштовхувати число. */}
+      <span className="min-w-0 text-[14px] leading-snug text-ink-muted">
+        {label}
+      </span>
+      <span className="tnum shrink-0 text-[22px] leading-none sm:text-[26px]">
+        {value}
+      </span>
     </Link>
   );
 }
@@ -82,13 +96,10 @@ export default async function AdminHome() {
         <span className="text-[15px] text-ink-muted">{dayTitle(now)}</span>
       </div>
 
-      {/* Головне питання екрана — «що в мене зараз», тож список іде перед
-          лічильниками, а не після них. */}
-      <div className="mt-6">
-        <TodayList appointments={today} now={now} />
-      </div>
-
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Лічильники зверху — це швидкий зріз стану й переходи в розділи.
+          Компактні навмисно: на телефоні вони мусять поміститись над списком,
+          не відсуваючи його, бо головне питання екрана — «що в мене зараз». */}
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <Tile
           label="Нові заявки"
           value={data.newRequests}
@@ -105,6 +116,10 @@ export default async function AdminHome() {
           value={data.activeServices}
           href="/admin/services"
         />
+      </div>
+
+      <div className="mt-8">
+        <TodayList appointments={today} now={now} />
       </div>
     </>
   );
