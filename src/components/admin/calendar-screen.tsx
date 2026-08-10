@@ -1,11 +1,18 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   addDays,
   dateKey,
   dayTitle,
+  isRangeLoaded,
   isSameDay,
   isToday,
   monthGrid,
@@ -45,14 +52,70 @@ export function CalendarScreen({
   const router = useRouter();
   const [mode, setMode] = useState<CalendarMode>("list");
   const [sheet, setSheet] = useState<SheetState>({ kind: "closed" });
+  const [isPending, startTransition] = useTransition();
 
   const closeSheet = useCallback(() => setSheet({ kind: "closed" }), []);
 
-  /** Дата й кабінет живуть в URL — стан переживає перезавантаження. */
-  const navigate = (d: Date, location = selectedLocation) => {
+  /**
+   * Дата живе в URL (стан переживає перезавантаження), але сторінка
+   * `force-dynamic`, тож `router.push` малює нову дату лише після відповіді
+   * сервера з двома запитами в базу. Стрічка через це відгукувалась на дотик
+   * із затримкою — здавалось, що кнопка не спрацювала, і люди тиснули ще раз.
+   *
+   * Тому активний день тримаємо ще й локально: клік перемальовує стрічку
+   * миттєво, а URL і дані підтягуються слідом.
+   *
+   * Саме `useOptimistic`, а не звичайний стан: він сам повертається до
+   * серверного значення, коли перехід завершився. Ручна синхронізація через
+   * ефект робила б зайвий каскадний рендер і ламалась би на «назад».
+   */
+  const [optimisticDate, setOptimisticDate] = useOptimistic(selectedDate);
+
+  /**
+   * Крок у межах уже завантаженого діапазону не турбує сервер, тож показану
+   * дату тримаємо тут. Разом із нею запам'ятовуємо серверну дату, від якої
+   * крок робився: щойно сервер віддасть інший період (перехід через межу
+   * місяця, зміна кабінету, кнопка «назад»), пара перестає збігатись і
+   * локальне значення саме себе скасовує — без ефектів і ручного скидання.
+   */
+  const [local, setLocal] = useState<{ date: Date; base: Date } | null>(null);
+  const shownDate =
+    local && dateKey(local.base) === dateKey(selectedDate)
+      ? local.date
+      : optimisticDate;
+
+  const buildHref = (d: Date, location: string) => {
     const params = new URLSearchParams({ date: dateKey(d) });
     if (location) params.set("location", location);
-    router.push(`/admin/calendar?${params}`, { scroll: false });
+    return `/admin/calendar?${params}`;
+  };
+
+  /**
+   * Дата й кабінет живуть в URL — стан переживає перезавантаження.
+   *
+   * Сервер віддає цілий місяць плюс тиждень навколо, тож крок стрілкою майже
+   * завжди потрапляє в дані, які вже лежать у пам'яті. У такому разі запит не
+   * потрібен зовсім: міняємо дату локально й лише підправляємо адресу через
+   * `history.replaceState` — на відміну від `router.push`, він не перезапускає
+   * серверний рендер. Перемикання стає миттєвим замість двох запитів у базу.
+   */
+  const navigate = (d: Date, location = selectedLocation) => {
+    const href = buildHref(d, location);
+
+    if (location === selectedLocation && isRangeLoaded(d, selectedDate)) {
+      setLocal({ date: d, base: selectedDate });
+      // Саме `replaceState`, а не `router.replace`: адреса оновлюється, але
+      // серверний рендер не перезапускається — заради цього все й робиться.
+      window.history.replaceState(null, "", href);
+      return;
+    }
+
+    setLocal(null);
+    startTransition(() => {
+      // Всередині переходу — інакше React відкине оптимістичне значення.
+      setOptimisticDate(d);
+      router.push(href, { scroll: false });
+    });
   };
 
   const selectDate = (d: Date) => navigate(d);
@@ -63,8 +126,12 @@ export function CalendarScreen({
    * виділення всередині того самого екрана.
    */
   const step = (direction: -1 | 1) => {
+    // Рахуємо від показаної дати, а не від серверної: інакше два швидкі
+    // дотики поспіль дали б один крок — другий стартував би з тієї ж дати.
+    const from = shownDate;
+
     if (mode === "month") {
-      const next = new Date(selectedDate);
+      const next = new Date(from);
       // Спершу 1-ше число: інакше 31 березня − 1 місяць дало б 3 березня.
       next.setDate(1);
       next.setMonth(next.getMonth() + direction);
@@ -74,12 +141,12 @@ export function CalendarScreen({
         next.getMonth() + 1,
         0,
       ).getDate();
-      next.setDate(Math.min(selectedDate.getDate(), lastDay));
+      next.setDate(Math.min(from.getDate(), lastDay));
       selectDate(next);
       return;
     }
 
-    selectDate(addDays(selectedDate, direction * 7));
+    selectDate(addDays(from, direction * 7));
   };
 
   const byDay = useMemo(() => {
@@ -98,7 +165,7 @@ export function CalendarScreen({
     [byDay],
   );
 
-  const dayList = byDay.get(dateKey(selectedDate)) ?? [];
+  const dayList = byDay.get(dateKey(shownDate)) ?? [];
 
   // Підсумок дня — майстер бачить завантаження й гроші, не рахуючи в голові.
   const dayTotal = dayList
@@ -112,11 +179,11 @@ export function CalendarScreen({
     <>
       <div className="flex items-center justify-between gap-3">
         <h1 className="min-w-0 truncate text-[19px] leading-tight sm:text-[22px]">
-          {monthTitle(selectedDate)}
+          {monthTitle(shownDate)}
         </h1>
 
         <div className="flex shrink-0 items-center gap-2">
-          {!isToday(selectedDate) && (
+          {!isToday(shownDate) && (
             <button
               type="button"
               onClick={() => selectDate(new Date())}
@@ -126,7 +193,7 @@ export function CalendarScreen({
             </button>
           )}
 
-          <DatePicker value={selectedDate} onPick={selectDate} />
+          <DatePicker value={shownDate} onPick={selectDate} />
         </div>
       </div>
 
@@ -136,14 +203,14 @@ export function CalendarScreen({
           <LocationChip
             label="Усі кабінети"
             active={selectedLocation === ""}
-            onClick={() => navigate(selectedDate, "")}
+            onClick={() => navigate(shownDate, "")}
           />
           {locations.map((l) => (
             <LocationChip
               key={l.id}
               label={l.city}
               active={selectedLocation === l.slug}
-              onClick={() => navigate(selectedDate, l.slug)}
+              onClick={() => navigate(shownDate, l.slug)}
             />
           ))}
         </div>
@@ -151,11 +218,12 @@ export function CalendarScreen({
 
       <div className="mt-5">
         <DateStrip
-          selected={selectedDate}
+          selected={shownDate}
           onSelect={selectDate}
           onStep={step}
           stepLabel={mode === "month" ? "місяць" : "тиждень"}
           counts={counts}
+          pending={isPending}
         />
       </div>
 
@@ -166,8 +234,8 @@ export function CalendarScreen({
       {(mode === "list" || mode === "day") && (
         <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className="text-[16px]">
-            {dayTitle(selectedDate)}
-            {isToday(selectedDate) && (
+            {dayTitle(shownDate)}
+            {isToday(shownDate) && (
               <span className="ml-2 text-[14px] text-ink-muted">сьогодні</span>
             )}
           </p>
@@ -187,12 +255,12 @@ export function CalendarScreen({
 
       <div className="mt-4">
         {mode === "list" && (
-          <ListView list={dayList} onOpen={openDetails} onCreate={() => setSheet({ kind: "form", start: selectedDate })} />
+          <ListView list={dayList} onOpen={openDetails} onCreate={() => setSheet({ kind: "form", start: shownDate })} />
         )}
         {mode === "day" && (
           <DayGrid
             list={dayList}
-            date={selectedDate}
+            date={shownDate}
             onOpen={openDetails}
             onSlot={(start) => setSheet({ kind: "form", start })}
           />
@@ -200,7 +268,7 @@ export function CalendarScreen({
         {mode === "week" && (
           <WeekGrid
             byDay={byDay}
-            date={selectedDate}
+            date={shownDate}
             onOpen={openDetails}
             onPickDay={selectDate}
           />
@@ -208,7 +276,7 @@ export function CalendarScreen({
         {mode === "month" && (
           <MonthView
             byDay={byDay}
-            date={selectedDate}
+            date={shownDate}
             onPickDay={(d) => {
               selectDate(d);
               setMode("list");
@@ -220,7 +288,7 @@ export function CalendarScreen({
       {/* Плаваюча кнопка — головна дія екрана, доступна в будь-якому режимі. */}
       <button
         type="button"
-        onClick={() => setSheet({ kind: "form", start: selectedDate })}
+        onClick={() => setSheet({ kind: "form", start: shownDate })}
         aria-label="Новий запис"
         className="fixed bottom-24 right-5 z-30 grid size-14 cursor-pointer place-items-center rounded-full bg-ink text-white shadow-lg transition-transform duration-200 hover:scale-105 md:bottom-8 md:right-8"
       >

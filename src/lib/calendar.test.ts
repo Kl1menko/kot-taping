@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  addDays,
   durationLabel,
+  isRangeLoaded,
   layoutDay,
+  loadedRange,
   minutesOfDay,
   overlaps,
   weekDays,
@@ -122,4 +125,43 @@ test("тривалість підписується українською", () 
   assert.equal(durationLabel(90), "1 година 30 хв");
   assert.equal(durationLabel(120), "2 години");
   assert.equal(durationLabel(300), "5 годин");
+});
+
+/* --- Кеш діапазону: коли крок стрілкою може обійтись без запиту --- */
+
+const d = (y: number, m: number, day: number) => new Date(y, m - 1, day);
+
+test("сусідній тиждень усередині місяця не потребує запиту", () => {
+  // 10 і 17 серпня 2026 — обидва в серпні, тиждень навколо не вилазить.
+  assert.equal(isRangeLoaded(d(2026, 8, 17), d(2026, 8, 10)), true);
+});
+
+test("та сама дата — тим паче не потребує", () => {
+  assert.equal(isRangeLoaded(d(2026, 8, 10), d(2026, 8, 10)), true);
+});
+
+test("крок у сусідній місяць потребує запиту", () => {
+  assert.equal(isRangeLoaded(d(2026, 9, 15), d(2026, 8, 10)), false);
+});
+
+test("тиждень на межі місяців потребує запиту", () => {
+  // 31 серпня 2026 — понеділок, його тиждень заходить у вересень,
+  // а завантажено було навколо 10 серпня (по 6 вересня включно).
+  const from = d(2026, 8, 10);
+  const to = d(2026, 8, 31);
+  const have = loadedRange(from);
+  const need = loadedRange(to);
+  assert.ok(need.end > have.end, "тиждень 31.08 має вилазити за межу");
+  assert.equal(isRangeLoaded(to, from), false);
+});
+
+test("завантажений діапазон накриває весь місяць і тиждень навколо", () => {
+  const { start, end } = loadedRange(d(2026, 8, 10));
+  // Серпень 2026 починається в суботу, тож тиждень 1-го числа тягне липень.
+  assert.ok(start <= d(2026, 8, 1), "початок має накривати 1 серпня");
+  assert.ok(end >= d(2026, 9, 1), "кінець має накривати весь серпень");
+});
+
+test("крок назад через межу місяця потребує запиту", () => {
+  assert.equal(isRangeLoaded(addDays(d(2026, 8, 3), -7), d(2026, 8, 10)), false);
 });

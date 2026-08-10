@@ -17,6 +17,7 @@ export function DateStrip({
   onStep,
   stepLabel,
   counts,
+  pending,
 }: {
   selected: Date;
   onSelect: (d: Date) => void;
@@ -25,6 +26,8 @@ export function DateStrip({
   stepLabel: string;
   /** dateKey → скільки записів того дня; малює крапки-індикатори. */
   counts?: Record<string, number>;
+  /** Дані за новий період ще їдуть — притлумлюємо крапки, щоб не брехали. */
+  pending?: boolean;
 }) {
   const days = weekDays(selected);
 
@@ -50,7 +53,7 @@ export function DateStrip({
               onClick={() => onSelect(day)}
               aria-current={active ? "date" : undefined}
               aria-label={`${day.getDate()} ${WEEKDAY_LETTER[(day.getDay() + 6) % 7]}${count ? `, записів: ${count}` : ", вільно"}`}
-              className="group flex cursor-pointer flex-col items-center gap-1 rounded-2xl py-2"
+              className="group flex cursor-pointer touch-manipulation flex-col items-center gap-1 rounded-2xl py-2 select-none"
             >
               <span
                 className={`text-[11px] uppercase tracking-[0.06em] ${active ? "text-ink" : "text-ink-muted"}`}
@@ -72,8 +75,14 @@ export function DateStrip({
               </span>
 
               {/* До трьох крапок — щільність дня видно, не читаючи чисел.
-                  Місце тримається завжди, щоб колонки не стрибали. */}
-              <span aria-hidden="true" className="flex h-1.5 items-center gap-0.5">
+                  Місце тримається завжди, щоб колонки не стрибали.
+
+                  Поки їдуть дані за новий тиждень, `counts` — ще від старого,
+                  тож притлумлюємо крапки: краще бліді, ніж упевнено хибні. */}
+              <span
+                aria-hidden="true"
+                className={`flex h-1.5 items-center gap-0.5 transition-opacity duration-200 ${pending ? "opacity-30" : ""}`}
+              >
                 {count > 0 &&
                   Array.from({ length: Math.min(count, 3) }).map((_, i) => (
                     <span
@@ -110,7 +119,12 @@ function Arrow({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors duration-200 hover:bg-surface hover:text-ink"
+      // 44×44 — мінімальна зона, у яку палець потрапляє впевнено; попередні
+      // 32px давали промахи саме на телефоні. Іконка лишилась того ж розміру,
+      // тож візуально стрічка не змінилась — виросла тільки площа дотику.
+      // `touch-manipulation` прибирає 300ms паузу на очікування дабл-тапу,
+      // через яку кожен дотик відчувався як затримка.
+      className="grid size-11 shrink-0 cursor-pointer touch-manipulation place-items-center rounded-full text-ink-muted transition-colors duration-200 select-none hover:bg-surface hover:text-ink active:bg-line"
     >
       <svg
         viewBox="0 0 24 24"

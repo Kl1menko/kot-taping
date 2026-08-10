@@ -162,6 +162,36 @@ export function monthRange(d: Date): { start: Date; end: Date } {
 }
 
 /**
+ * Що саме сторінка календаря тягне для обраної дати: весь місяць плюс тиждень
+ * навколо. Цього досить для всіх чотирьох режимів одразу, тож перемикання
+ * День/Тиждень/Місяць не ходить у мережу.
+ *
+ * Живе тут, а не в `page.tsx`, бо на цей самий діапазон спирається клієнт:
+ * він вирішує, чи потрібен новий запит при кроці стрілкою. Дві копії цієї
+ * логіки роз'їхались би — і клієнт показував би порожній тиждень, впевнений,
+ * що дані вже є.
+ */
+export function loadedRange(d: Date): { start: Date; end: Date } {
+  const month = monthRange(d);
+  const week = weekRange(d);
+  return {
+    start: week.start < month.start ? week.start : month.start,
+    end: week.end > month.end ? week.end : month.end,
+  };
+}
+
+/**
+ * Чи повністю вкладається потрібний для дати `d` діапазон у вже завантажений
+ * навколо `loadedFor`. Якщо так — усі режими намалюються з наявних даних і
+ * похід на сервер зайвий.
+ */
+export function isRangeLoaded(d: Date, loadedFor: Date): boolean {
+  const have = loadedRange(loadedFor);
+  const need = loadedRange(d);
+  return need.start >= have.start && need.end <= have.end;
+}
+
+/**
  * Чи перетинаються два записи в часі. Дотик кінець-у-початок (11:00 після
  * 10:30–11:00) перетином не вважається — інакше щільний графік був би
  * неможливий.

@@ -1,7 +1,7 @@
 import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { listAppointments, listLocations } from "@/lib/db/appointments";
-import { monthRange, startOfDay, weekRange } from "@/lib/calendar";
+import { loadedRange, startOfDay } from "@/lib/calendar";
 import { CalendarScreen } from "@/components/admin/calendar-screen";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +26,9 @@ export default async function CalendarPage({
   const { date, location } = await searchParams;
   const selected = parseDate(date);
 
-  // Тягнемо весь місяць плюс тиждень навколо: цього досить для всіх чотирьох
-  // режимів, тож перемикання День/Тиждень/Місяць не ходить у мережу.
-  const month = monthRange(selected);
-  const week = weekRange(selected);
-  const start = week.start < month.start ? week.start : month.start;
-  const end = week.end > month.end ? week.end : month.end;
+  // Місяць плюс тиждень навколо — на цей же діапазон спирається клієнт,
+  // вирішуючи, чи потрібен новий запит при кроці стрілкою (див. loadedRange).
+  const { start, end } = loadedRange(selected);
 
   const locations = await listLocations();
 
