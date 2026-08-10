@@ -79,6 +79,42 @@ scripts/          хеш пароля, seed
 
 ## Деплой
 
-Vercel: підключити репозиторій, додати змінні оточення, виконати міграції на
-проді. Адмінка закрита проксі (`src/proxy.ts`) і перевіркою сесії в кожній
-сторінці та Server Action; `/admin` віддається з `noindex` і `no-store`.
+Проєкт уже підключений до Vercel (`kot-taping`, команда `kl1menkos-projects`):
+пуш у `main` запускає продакшен-деплой автоматично.
+
+### Що потрібно один раз налаштувати
+
+**1. Змінні оточення** — Project Settings → Environment Variables, для
+Production і Preview:
+
+```
+SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SESSION_SECRET, ADMIN_PASSWORD_HASH
+NEXT_PUBLIC_SITE_URL          (коли з'явиться домен)
+TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID   (необов'язкові)
+```
+
+Без них лендінг усе одно працює: змінні читаються ліниво, тож падає лише
+адмінка при спробі входу. Це навмисно — вітрина не має лягати через
+несконфігуровану адмінку.
+
+**2. Міграції на проді.** Виконати `supabase/migrations/*.sql` по порядку в
+SQL-редакторі того проєкту Supabase, на який вказує `SUPABASE_URL`, і
+запустити `npm run db:seed` (прайс і контент). `db:demo` на робочу базу не
+запускати — він створює вигадані записи.
+
+**3. Vercel Authentication.** У проєкті увімкнено SSO-захист для всіх адрес,
+крім кастомного домену: `*.vercel.app` вимагає входу в акаунт Vercel, тож
+майстриня в адмінку не потрапить. Або підключити свій домен, або вимкнути
+Vercel Authentication у Settings → Deployment Protection. Захист адмінки від
+цього не залежить — вона закрита власною сесією.
+
+**4. Домен.** Після підключення задати `NEXT_PUBLIC_SITE_URL=https://<домен>`,
+інакше canonical, sitemap і OG-прев'ю вказуватимуть на `*.vercel.app`.
+
+### Що вже враховано в коді
+
+- cookie сесії — `httpOnly`, `sameSite=lax`, `secure` у проді;
+- адмінка закрита проксі (`src/proxy.ts`) і `requireSession()` у кожній
+  сторінці та Server Action;
+- `/admin` віддається з `noindex` і `no-store`, у `robots.txt` — `disallow`;
+- заголовки безпеки на весь сайт — див. `next.config.ts`.
