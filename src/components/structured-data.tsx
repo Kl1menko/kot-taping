@@ -1,22 +1,45 @@
 import { SERVICES } from "@/lib/services";
-import { CONTACTS, SOCIALS } from "@/lib/contacts";
+import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { FAQ_ITEMS } from "@/lib/content";
+import { SITE_URL } from "@/lib/site";
 
 /**
- * Schema.org markup. The street address is still missing — add `address` once
- * the studio location is confirmed.
+ * Schema.org markup.
+ *
+ * Кабінетів два, тому кожен описано окремим `department` зі своєю адресою —
+ * а не однією `address` на весь бізнес. Для локальної видачі це суттєво:
+ * Львів і Київ мають знаходитись незалежно.
+ *
+ * Геокоординат тут свідомо немає: точних не маємо, а вигадані відправили б
+ * людину не за тією адресою.
  */
 export function StructuredData() {
   const business = {
     "@context": "https://schema.org",
     "@type": "HealthAndBeautyBusiness",
+    "@id": `${SITE_URL}/#business`,
     name: "Kotova Taping",
+    url: SITE_URL,
     description:
       "Студія естетичного та лімфодренажного тейпування обличчя і тіла.",
     email: CONTACTS.email,
+    telephone: CONTACTS.phone,
     sameAs: SOCIALS.map((s) => s.href),
     priceRange: "₴₴",
     openingHours: "Mo-Sa 10:00-19:00",
+    department: LOCATIONS.map((location) => ({
+      "@type": "HealthAndBeautyBusiness",
+      name: `Kotova Taping — ${location.city}`,
+      telephone: CONTACTS.phone,
+      priceRange: "₴₴",
+      openingHours: "Mo-Sa 10:00-19:00",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: location.address,
+        addressLocality: location.city,
+        addressCountry: "UA",
+      },
+    })),
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Послуги тейпування",

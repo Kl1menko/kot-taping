@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
 import { Preloader } from "@/components/preloader";
+import { SITE_URL } from "@/lib/site";
 
 const grotesque = Manrope({
   subsets: ["latin", "cyrillic"],
@@ -14,11 +15,15 @@ const DESCRIPTION =
   "Естетичне та лімфодренажне тейпування обличчя і тіла. Індивідуальний підбір схем, гіпоалергенні матеріали, видимий результат після першого сеансу.";
 
 export const metadata: Metadata = {
+  // Без цього OG-картинка і canonical лишаються відносними шляхами, а
+  // Facebook/Telegram такі не резолвлять — прев'ю при шері виходить порожнім.
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Kotova Taping — студія естетичного тейпування",
     template: "%s · Kotova Taping",
   },
   description: DESCRIPTION,
+  alternates: { canonical: "/" },
   keywords: [
     "тейпування обличчя",
     "лімфодренажне тейпування",
@@ -29,6 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "uk_UA",
+    url: "/",
     siteName: "Kotova Taping",
     title: "Kotova Taping — студія естетичного тейпування",
     description: DESCRIPTION,

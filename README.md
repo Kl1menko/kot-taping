@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kotova Taping
 
-## Getting Started
+Сайт і внутрішня система студії естетичного тейпування: лендінг із записом та
+адмінка, у якій майстриня веде календар, клієнтів і прайс.
 
-First, run the development server:
+Next.js 16 (App Router), React 19, Tailwind 4, Supabase (Postgres).
+
+## Запуск
 
 ```bash
+npm install
+cp .env.example .env.local   # заповнити — див. нижче
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Лендінг — http://localhost:3000, адмінка — http://localhost:3000/admin.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Змінні оточення
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Усі серверні змінні читає `src/lib/env.ts` і падає на старті, якщо чогось
+бракує. Опис кожної — у `.env.example`; коротко:
 
-## Learn More
+| Змінна | Обов'язкова | Призначення |
+| --- | --- | --- |
+| `SUPABASE_URL` | так | Проєкт Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | так | Доступ у обхід RLS, **лише сервер** |
+| `SESSION_SECRET` | так | Підпис сесії адмінки, ≥32 символи |
+| `ADMIN_PASSWORD_HASH` | так | Хеш пароля, не пароль |
+| `TELEGRAM_BOT_TOKEN` | ні | Сповіщення про заявки |
+| `TELEGRAM_CHAT_ID` | ні | Куди слати сповіщення |
+| `NEXT_PUBLIC_SITE_URL` | на проді | Канонічна адреса для OG, sitemap, schema.org |
 
-To learn more about Next.js, take a look at the following resources:
+Пароль адміна:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run admin:hash -- 'ваш-пароль'   # вивід у ADMIN_PASSWORD_HASH
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`NEXT_PUBLIC_SITE_URL` на Vercel можна не задавати — тоді береться
+`VERCEL_PROJECT_PRODUCTION_URL`. Але зі своїм доменом задати варто: інакше
+canonical вказуватиме на `*.vercel.app`.
 
-## Deploy on Vercel
+## База даних
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Міграції в `supabase/migrations/` виконуються по порядку в SQL-редакторі
+Supabase (або через `supabase db push`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run db:seed   # прайс і контент лендінгу з коду в базу
+npm run db:demo   # демо-записи на місяць, щоб побачити інтерфейс живим
+```
+
+`db:demo` створює вигадані записи — на робочій базі його запускати не треба.
+
+Доступ до таблиць — виключно з сервера під service-role ключем. RLS увімкнено
+без жодної policy, тож для anon-ролі таблиці закриті: у базі лежать телефони
+клієнтів і нотатки про здоров'я.
+
+## Перевірки
+
+```bash
+npm run lint
+npm test          # юніт-тести календаря та аналітики
+npm run build
+```
+
+## Структура
+
+```
+src/app/          маршрути: лендінг, /admin/*, metadata-файли
+src/components/   секції лендінгу; admin/ — екрани адмінки
+src/lib/          домен: services, calendar, analytics, db/, auth/
+supabase/         міграції
+scripts/          хеш пароля, seed
+```
+
+Домен живе в `src/lib` і не залежить від React — тому `calendar.ts` та
+`analytics.ts` покриті тестами без рендера.
+
+## Деплой
+
+Vercel: підключити репозиторій, додати змінні оточення, виконати міграції на
+проді. Адмінка закрита проксі (`src/proxy.ts`) і перевіркою сесії в кожній
+сторінці та Server Action; `/admin` віддається з `noindex` і `no-store`.
