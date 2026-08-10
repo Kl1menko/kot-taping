@@ -47,6 +47,11 @@ export function AppointmentCard({
         <span className="mt-3 flex flex-wrap items-center gap-2">
           <StatusBadge status={appointment.status} />
           <Chip>{durationLabel(appointment.duration_min)}</Chip>
+          {/* Кабінет міг бути видалений — тоді зв'язку немає, і місто не
+              показуємо, а не малюємо порожній чип. */}
+          {appointment.location?.city && (
+            <Chip tone="sand">{appointment.location.city}</Chip>
+          )}
           {appointment.source === "site" && <Chip tone="blush">з сайту</Chip>}
         </span>
       </span>

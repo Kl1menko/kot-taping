@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "./client";
 import { normalizePhone } from "@/lib/phone";
-import type { ClientRow } from "./types";
+import type { AppointmentRow, ClientRow } from "./types";
 
 export async function findClientByPhone(
   phone: string,
@@ -95,6 +95,17 @@ export type ClientWithStats = ClientRow & {
   lastVisit: string | null;
   /** Найближчий запланований запис — щоб було видно, кого чекати. */
   nextVisit: string | null;
+  /**
+   * Міста, у які клієнтка ходить, — від найчастішого до рідшого.
+   *
+   * Саме список, а не одне місто: студія працює у Львові й Києві, і людина
+   * цілком може бувати в обох (переїзд, відрядження). Показати одне означало б
+   * тихо збрехати про друге.
+   *
+   * Рахуємо за всіма записами, не лише виконаними: щойно створений запис у
+   * новому місті — це теж відповідь на питання «куди вона ходить».
+   */
+  cities: string[];
 };
 
 /**
@@ -112,7 +123,7 @@ export async function listClientsWithStats(
 
   const { data: appointments, error } = await db()
     .from("appointments")
-    .select("client_id, price, starts_at, status")
+    .select("client_id, price, starts_at, status, location:locations ( city )")
     .in(
       "client_id",
       clients.map((c) => c.id),
@@ -120,19 +131,45 @@ export async function listClientsWithStats(
 
   if (error) throw new Error(`Не вдалося прочитати візити: ${error.message}`);
 
+  // Вкладений джойн збиває виведення типів postgrest до `never`, тож
+  // описуємо форму рядка вручну — так само, як у appointments.ts.
+  type VisitRow = {
+    client_id: string;
+    price: number;
+    starts_at: string;
+    status: AppointmentRow["status"];
+    location: { city: string } | null;
+  };
+  const visits = (appointments ?? []) as unknown as VisitRow[];
+
   const now = Date.now();
   const stats = new Map<
     string,
-    { visits: number; totalSpent: number; lastVisit: string | null; nextVisit: string | null }
+    {
+      visits: number;
+      totalSpent: number;
+      lastVisit: string | null;
+      nextVisit: string | null;
+      /** місто → скільки разів; у список віддамо відсортованим за частотою. */
+      cityCounts: Map<string, number>;
+    }
   >();
 
-  for (const a of appointments ?? []) {
+  for (const a of visits) {
     const entry = stats.get(a.client_id) ?? {
       visits: 0,
       totalSpent: 0,
       lastVisit: null,
       nextVisit: null,
+      cityCounts: new Map<string, number>(),
     };
+
+    // Скасовані не рахуємо: візит, який не відбувся, нічого не каже про те,
+    // куди людина ходить. Кабінет міг бути видалений — тоді міста немає.
+    const city = a.location?.city;
+    if (city && a.status !== "cancelled") {
+      entry.cityCounts.set(city, (entry.cityCounts.get(city) ?? 0) + 1);
+    }
 
     if (a.status === "done") {
       entry.visits += 1;
@@ -151,15 +188,21 @@ export async function listClientsWithStats(
     stats.set(a.client_id, entry);
   }
 
-  return clients.map((client) => ({
-    ...client,
-    ...(stats.get(client.id) ?? {
-      visits: 0,
-      totalSpent: 0,
-      lastVisit: null,
-      nextVisit: null,
-    }),
-  }));
+  return clients.map((client) => {
+    const entry = stats.get(client.id);
+    return {
+      ...client,
+      visits: entry?.visits ?? 0,
+      totalSpent: entry?.totalSpent ?? 0,
+      lastVisit: entry?.lastVisit ?? null,
+      nextVisit: entry?.nextVisit ?? null,
+      cities: entry
+        ? [...entry.cityCounts]
+            .sort((a, b) => b[1] - a[1])
+            .map(([city]) => city)
+        : [],
+    };
+  });
 }
 
 export async function updateClientNotes(id: string, notes: string) {

@@ -131,6 +131,13 @@ function ClientCard({
         {client.totalSpent > 0 && (
           <Chip tone="sand">{formatMoney(client.totalSpent)}</Chip>
         )}
+        {/* Куди ходить. Міст може бути два — показуємо обидва, бо «Львів» на
+            картці людини, яка буває і в Києві, збивав би з пантелику. */}
+        {client.cities.map((city) => (
+          <Chip key={city} tone="blush">
+            {city}
+          </Chip>
+        ))}
         {client.lastVisit && (
           <span className="text-[13px] text-ink-muted">
             остання {dayTitle(new Date(client.lastVisit))}
@@ -138,8 +145,12 @@ function ClientCard({
         )}
       </div>
 
+      {/* Нотатка — те, заради чого майстер і відкриває картку, тож колір
+          звичайний ink, а не приглушений. Сірим по сірому (#646464 на
+          #ededed) вона формально проходила AA (5.05:1), але на тлі темних
+          чипів і темного імені читалась як другорядна. */}
       {client.notes && (
-        <p className="mt-3 line-clamp-2 rounded-xl bg-canvas px-3 py-2 text-[14px] leading-relaxed text-ink-muted">
+        <p className="mt-3 line-clamp-2 rounded-xl bg-canvas px-3 py-2 text-[14px] leading-relaxed text-ink">
           {client.notes}
         </p>
       )}

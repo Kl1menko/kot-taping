@@ -94,8 +94,10 @@ export function TodayList({
               {appointment.source === "site" && <Chip tone="blush">з сайту</Chip>}
             </div>
 
+            {/* Той самий ink, що й у картці клієнта: нотатка — це те, що
+                майстер має прочитати перед візитом, а не фон. */}
             {appointment.client.notes && (
-              <p className="mt-3 line-clamp-2 rounded-xl bg-canvas px-3 py-2 text-[14px] leading-relaxed text-ink-muted">
+              <p className="mt-3 line-clamp-2 rounded-xl bg-canvas px-3 py-2 text-[14px] leading-relaxed text-ink">
                 {appointment.client.notes}
               </p>
             )}
