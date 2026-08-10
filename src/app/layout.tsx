@@ -59,8 +59,12 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // suppressHydrationWarning — лише для <html>: розширення браузера
+  // (LanguageTool, Grammarly тощо) дописують сюди свої атрибути ще до
+  // гідратації, і React лається на різницю, якої в нашому коді немає.
+  // Прапорець діє на атрибути самого тега, не на вміст сторінки.
   return (
-    <html lang="uk" className={grotesque.variable}>
+    <html lang="uk" className={grotesque.variable} suppressHydrationWarning>
       <body className="min-h-dvh antialiased">
         <Preloader />
         {children}

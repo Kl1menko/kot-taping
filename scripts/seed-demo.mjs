@@ -23,6 +23,16 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 /** Демо-клієнтів упізнаємо за префіксом номера. */
 const DEMO_PREFIX = "099000";
 
+// Детермінований генератор: однаковий набір між прогонами, тож візуальні
+// зміни видно без шуму від випадковості.
+let seed = 20260808;
+const rand = () => {
+  seed = (seed * 1103515245 + 12345) % 2147483648;
+  return seed / 2147483648;
+};
+
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+
 const NAMES = [
   "Олена Марчук", "Ірина Бондар", "Наталя Швець", "Юлія Кравець",
   "Тетяна Лисенко", "Оксана Гриценко", "Марія Ткач", "Софія Романюк",
@@ -34,7 +44,10 @@ const NOTES = [
   "Чутлива шкіра — тестувати тейп на згині ліктя.",
   "Просить не використовувати рожевий тейп.",
   "Після кесаревого, працюємо обережно з низом живота.",
-  null, null, null,
+  // Довга нотатка навмисно: у картці вона обрізається до двох рядків
+  // (line-clamp-2), і треба бачити, що обрив виглядає охайно.
+  "Алергія на акрил у клеї — беремо гіпоалергенний тейп. Приходить із донькою, тож закладаємо трохи більше часу на сеанс і не ставимо впритул до наступного запису.",
+  null, null,
 ];
 
 async function clear() {
@@ -73,6 +86,18 @@ if (!services?.length) {
   process.exit(1);
 }
 
+// Кабінети. `appointments.location_id` — not null, тож без них сидер падає.
+const { data: locations, error: locError } = await db
+  .from("locations")
+  .select("id, slug, city")
+  .order("sort");
+
+if (locError) throw locError;
+if (!locations?.length) {
+  console.error("У базі немає кабінетів — застосуйте міграції supabase/migrations");
+  process.exit(1);
+}
+
 // — Клієнти —
 const clientRows = NAMES.map((name, i) => ({
   name,
@@ -88,6 +113,34 @@ const { data: clients, error: clientError } = await db
 if (clientError) throw clientError;
 console.log(`✓ Клієнтів: ${clients.length}`);
 
+/**
+ * До якого кабінету «прив'язана» кожна клієнтка.
+ *
+ * Розподіл навмисно нерівний, щоб на екрані було видно всі три випадки, які
+ * вміє показати картка: тільки Львів, тільки Київ і обидва міста (кожна
+ * четверта — «мандрівна»). Клієнтки без жодного візиту теж лишаються — для
+ * них список міст порожній.
+ */
+const homeFor = new Map();
+clients.forEach((c, i) => {
+  homeFor.set(c.id, {
+    primary: locations[i % locations.length],
+    roams: i % 4 === 0 && locations.length > 1,
+  });
+});
+
+const locationFor = (clientId) => {
+  const home = homeFor.get(clientId);
+  if (!home) return pick(locations);
+  // «Мандрівні» зрідка потрапляють у другий кабінет — саме це і дає в картці
+  // два міста, відсортовані за частотою.
+  if (home.roams && rand() < 0.35) {
+    const others = locations.filter((l) => l.id !== home.primary.id);
+    return others.length ? pick(others) : home.primary;
+  }
+  return home.primary;
+};
+
 // — Записи на весь поточний місяць —
 const now = new Date();
 const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -96,16 +149,6 @@ const daysInMonth = monthEnd.getDate();
 
 const TARGET = 100;
 const appointments = [];
-
-// Детермінований генератор: однаковий набір між прогонами, тож візуальні
-// зміни видно без шуму від випадковості.
-let seed = 20260808;
-const rand = () => {
-  seed = (seed * 1103515245 + 12345) % 2147483648;
-  return seed / 2147483648;
-};
-
-const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 
 for (let day = 1; day <= daysInMonth && appointments.length < TARGET; day++) {
   const date = new Date(now.getFullYear(), now.getMonth(), day);
@@ -139,9 +182,12 @@ for (let day = 1; day <= daysInMonth && appointments.length < TARGET; day++) {
       ? svc.price + Math.floor(rand() * 6) * 200
       : svc.price;
 
+    const clientId = pick(clients).id;
+
     appointments.push({
-      client_id: pick(clients).id,
+      client_id: clientId,
       service_id: svc.id,
+      location_id: locationFor(clientId).id,
       starts_at: start.toISOString(),
       duration_min: svc.duration_min,
       price,
@@ -171,6 +217,9 @@ for (let i = 0; i < 12; i++) {
     name: pick(NAMES),
     phone: `${DEMO_PREFIX}${String(100 + i).padStart(4, "0")}`,
     service_slug: pick(services).slug,
+    // Кожна п'ята заявка без кабінету — «будь-який», щоб було видно, що
+    // картка заявки коректно живе й без міста.
+    location_slug: i % 5 === 0 ? null : pick(locations).slug,
     preferred_date: preferred.toISOString().slice(0, 10),
     note: rand() < 0.4 ? "Зручніше після 17:00." : null,
     status,
@@ -186,11 +235,24 @@ console.log(`✓ Заявок: ${requests.length}`);
 const done = appointments.filter((a) => a.status === "done");
 const revenue = done.reduce((s, a) => s + a.price, 0);
 
+const byCity = locations
+  .map((l) => {
+    const n = appointments.filter((a) => a.location_id === l.id).length;
+    return `${l.city} ${n}`;
+  })
+  .join(" · ");
+
+// Скільки клієнток мають два міста — саме той випадок, який найлегше
+// проґавити на екрані, якщо його немає в даних.
+const roaming = [...homeFor.values()].filter((h) => h.roams).length;
+
 console.log(`
 Період: ${monthStart.toLocaleDateString("uk-UA")} — ${monthEnd.toLocaleDateString("uk-UA")}
   виконаних: ${done.length} · виручка ${revenue.toLocaleString("uk-UA")} ₴
   запланованих: ${appointments.filter((a) => a.status === "planned").length}
   скасованих: ${appointments.filter((a) => a.status === "cancelled").length}
   неявок: ${appointments.filter((a) => a.status === "no_show").length}
+  по кабінетах: ${byCity}
+  клієнток, що бувають у двох містах: до ${roaming}
 
 Прибрати: npm run db:demo -- --clear`);
