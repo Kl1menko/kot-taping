@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  byLocation,
   byService,
   change,
   clientSplit,
   conversion,
   loadByWeekday,
   revenueByDay,
+  revenueByMonth,
   totals,
   type Countable,
 } from "./analytics.ts";
@@ -194,4 +196,108 @@ test("запис поза робочим вікном не роздуває за
   );
 
   assert.equal(load.find((l) => l.weekday === 1)!.percent, 0);
+});
+
+// — Розбивка по кабінетах —
+
+const CITIES = new Map([
+  ["lviv-id", "Львів"],
+  ["kyiv-id", "Київ"],
+]);
+
+test("виручка ділиться між кабінетами", () => {
+  const stats = byLocation(
+    [
+      appt({ location_id: "lviv-id", price: 2000 }),
+      appt({ location_id: "lviv-id", price: 1000 }),
+      appt({ location_id: "kyiv-id", price: 1000 }),
+    ],
+    CITIES,
+  );
+
+  const lviv = stats.find((s) => s.id === "lviv-id")!;
+  const kyiv = stats.find((s) => s.id === "kyiv-id")!;
+
+  assert.equal(lviv.revenue, 3000);
+  assert.equal(lviv.count, 2);
+  assert.equal(lviv.averageCheck, 1500);
+  assert.equal(lviv.share, 75);
+  assert.equal(kyiv.share, 25);
+});
+
+test("кабінет без візитів лишається у списку з нулем", () => {
+  const stats = byLocation([appt({ location_id: "lviv-id" })], CITIES);
+
+  const kyiv = stats.find((s) => s.id === "kyiv-id");
+  assert.ok(kyiv, "порожній кабінет не має зникати зі звіту");
+  assert.equal(kyiv.revenue, 0);
+  assert.equal(kyiv.count, 0);
+  // Ділення на нуль у середньому чеку не має давати NaN.
+  assert.equal(kyiv.averageCheck, 0);
+});
+
+test("до кабінетів потрапляють лише виконані візити", () => {
+  const stats = byLocation(
+    [
+      appt({ location_id: "lviv-id", price: 1000, status: "done" }),
+      appt({ location_id: "lviv-id", price: 9000, status: "planned" }),
+      appt({ location_id: "lviv-id", price: 5000, status: "cancelled" }),
+    ],
+    CITIES,
+  );
+
+  assert.equal(stats.find((s) => s.id === "lviv-id")!.revenue, 1000);
+});
+
+test("кабінети відсортовані за виручкою", () => {
+  const stats = byLocation(
+    [
+      appt({ location_id: "lviv-id", price: 500 }),
+      appt({ location_id: "kyiv-id", price: 4000 }),
+    ],
+    CITIES,
+  );
+
+  assert.equal(stats[0].city, "Київ", "попереду має бути більша виручка");
+});
+
+// — Виручка по місяцях —
+
+test("виручка розкладається по місяцях року", () => {
+  const months = revenueByMonth(
+    [
+      appt({ starts_at: new Date(2026, 0, 15, 10, 0).toISOString(), price: 1000 }),
+      appt({ starts_at: new Date(2026, 7, 3, 10, 0).toISOString(), price: 2000 }),
+      appt({ starts_at: new Date(2026, 7, 20, 10, 0).toISOString(), price: 500 }),
+    ],
+    2026,
+  );
+
+  assert.equal(months.length, 12, "порожні місяці лишаються в ряду");
+  assert.equal(months[0].revenue, 1000);
+  assert.equal(months[7].revenue, 2500);
+  assert.equal(months[7].count, 2);
+  assert.equal(months[5].revenue, 0);
+});
+
+test("записи іншого року не потрапляють у місяці", () => {
+  const months = revenueByMonth(
+    [
+      appt({ starts_at: new Date(2025, 7, 3, 10, 0).toISOString(), price: 9000 }),
+      appt({ starts_at: new Date(2026, 7, 3, 10, 0).toISOString(), price: 1000 }),
+    ],
+    2026,
+  );
+
+  assert.equal(months[7].revenue, 1000);
+});
+
+test("незароблені візити рахуються в count, але не в revenue", () => {
+  const months = revenueByMonth(
+    [appt({ starts_at: new Date(2026, 7, 3, 10, 0).toISOString(), price: 3000, status: "planned" })],
+    2026,
+  );
+
+  assert.equal(months[7].count, 1, "запланований візит — це подія в місяці");
+  assert.equal(months[7].revenue, 0, "але ще не гроші");
 });

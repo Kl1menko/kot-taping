@@ -5,11 +5,17 @@ import type {
   ClientSplit,
   Conversion,
   DayBucket,
+  LocationStat,
+  MonthBucket,
   ServiceStat,
   Totals,
   WeekdayLoad,
 } from "@/lib/analytics";
-import { WORK_END_HOUR, WORK_START_HOUR } from "@/lib/calendar";
+import {
+  MONTHS_SHORT,
+  WORK_END_HOUR,
+  WORK_START_HOUR,
+} from "@/lib/calendar";
 import { Panel, formatMoney } from "./ui";
 
 export type Period = "week" | "month" | "year";
@@ -29,13 +35,26 @@ const PERIOD_NOUN: Record<Period, string> = {
 export type AnalyticsData = {
   period: Period;
   title: string;
+  /** `2026-03` або `2026` — якір періоду для посилань «назад/вперед». */
+  anchor: string;
+  locations: { slug: string; city: string }[];
+  /** Порожньо — «Усі кабінети». */
+  activeLocation: string;
   totals: Totals;
   changes: {
     appointments: number | null;
     revenue: number | null;
     averageCheck: number | null;
   };
+  /** Той самий період торік — сезонність важливіша за «проти минулого місяця». */
+  lastYear: {
+    totals: Totals;
+    revenue: number | null;
+    appointments: number | null;
+  };
   days: DayBucket[];
+  months: MonthBucket[];
+  byLocation: LocationStat[];
   services: ServiceStat[];
   clients: ClientSplit;
   conversion: Conversion;
@@ -44,8 +63,41 @@ export type AnalyticsData = {
   workDays: number;
 };
 
+/**
+ * Зсув якоря на `delta` періодів.
+ *
+ * Для тижня рухаємось помісячно — окремого якоря для тижня немає, і це свідомо:
+ * перемикач періоду тримає одну шкалу «місяць/рік», а тиждень усередині місяця
+ * майстриня обирає в календарі.
+ */
+function shiftAnchor(anchor: string, period: Period, delta: number): string {
+  if (period === "year") return String(Number(anchor) + delta);
+
+  const [y, m] = anchor.split("-").map(Number);
+  const shifted = new Date(y, m - 1 + delta, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function hrefFor(
+  data: AnalyticsData,
+  over: { period?: Period; anchor?: string; location?: string } = {},
+): string {
+  const period = over.period ?? data.period;
+  // Зміна періоду скидає якір у сьогодення: «2026-03» у режимі року стало б
+  // просто «2026», і користувач мовчки поїхав би не туди, куди тиснув.
+  const anchor =
+    over.anchor ?? (over.period && over.period !== data.period ? "" : data.anchor);
+  const location = over.location ?? data.activeLocation;
+
+  const params = new URLSearchParams({ period });
+  if (anchor) params.set("at", anchor);
+  if (location) params.set("location", location);
+  return `/admin/analytics?${params}`;
+}
+
 export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
   const empty = data.totals.appointments === 0;
+  const multiLocation = data.locations.length > 1;
 
   return (
     <>
@@ -57,7 +109,7 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
         {PERIODS.map((p) => (
           <Link
             key={p.id}
-            href={`/admin/analytics?period=${p.id}`}
+            href={hrefFor(data, { period: p.id })}
             aria-current={data.period === p.id ? "page" : undefined}
             className={[
               "min-w-0 flex-1 rounded-full px-3 py-2.5 text-center text-[14px] whitespace-nowrap",
@@ -72,7 +124,57 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
         ))}
       </nav>
 
-      <p className="mt-5 text-[15px] text-ink-muted">{data.title}</p>
+      {multiLocation && (
+        <nav
+          aria-label="Кабінет"
+          className="mt-2 flex gap-1 rounded-full bg-surface p-1"
+        >
+          <Link
+            href={hrefFor(data, { location: "" })}
+            aria-current={data.activeLocation === "" ? "page" : undefined}
+            className={tabCls(data.activeLocation === "")}
+          >
+            Усі кабінети
+          </Link>
+          {data.locations.map((l) => (
+            <Link
+              key={l.slug}
+              href={hrefFor(data, { location: l.slug })}
+              aria-current={data.activeLocation === l.slug ? "page" : undefined}
+              className={tabCls(data.activeLocation === l.slug)}
+            >
+              {l.city}
+            </Link>
+          ))}
+        </nav>
+      )}
+
+      {/* Стрілки дають дивитись у минуле, а не лише на поточний період. */}
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <Link
+          href={hrefFor(data, {
+            anchor: shiftAnchor(data.anchor, data.period, -1),
+          })}
+          aria-label="Попередній період"
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-line transition-colors duration-200 hover:border-ink"
+        >
+          <Arrow direction="left" />
+        </Link>
+
+        <p className="min-w-0 flex-1 truncate text-center text-[15px]">
+          {data.title}
+        </p>
+
+        <Link
+          href={hrefFor(data, {
+            anchor: shiftAnchor(data.anchor, data.period, 1),
+          })}
+          aria-label="Наступний період"
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-line transition-colors duration-200 hover:border-ink"
+        >
+          <Arrow direction="right" />
+        </Link>
+      </div>
 
       {empty ? (
         <Panel className="mt-4 px-6 py-16 text-center">
@@ -114,6 +216,86 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
         ↑↓ — зміна проти попереднього періоду такої ж тривалості. Виручка
         рахується за виконаними візитами.
       </p>
+
+      {/* Той самий період торік. Для режиму «Рік» блок не потрібен: там
+          «попередній період» і «торік» — одне й те саме. */}
+      {data.period !== "year" && data.lastYear.totals.appointments > 0 && (
+        <Section title="Торік у цей самий період">
+          <div className="grid grid-cols-2 gap-3 px-5 py-5">
+            <Stat
+              label="виручка торік"
+              value={formatMoney(data.lastYear.totals.revenue)}
+            />
+            <Stat
+              label="візитів торік"
+              value={String(data.lastYear.totals.appointments)}
+            />
+          </div>
+          <p className="px-5 pb-5 text-[13px] leading-relaxed text-ink-muted">
+            {describeYearChange(data.lastYear.revenue)}
+          </p>
+        </Section>
+      )}
+
+      {multiLocation && (
+        <Section title="Кабінети">
+          {data.byLocation.every((l) => l.count === 0) ? (
+            <p className="px-5 py-6 text-[15px] text-ink-muted">
+              Виконаних візитів за період не було.
+            </p>
+          ) : (
+            <ul className="px-5 py-5">
+              {data.byLocation.map((l) => (
+                <li
+                  key={l.id}
+                  className="border-t border-line py-4 first:border-t-0 first:pt-0"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate text-[16px]">
+                      {l.city}
+                    </span>
+                    <span className="tnum shrink-0 text-[16px]">
+                      {formatMoney(l.revenue)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-canvas">
+                    <div
+                      className="h-full rounded-full bg-ink"
+                      style={{ width: `${l.share}%` }}
+                    />
+                  </div>
+                  <p className="tnum mt-2 text-[13px] text-ink-muted">
+                    {l.count} {visitWord(l.count)} · {l.share}% доходу
+                    {l.count > 0 &&
+                      ` · середній чек ${formatMoney(l.averageCheck)}`}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="px-5 pb-5 text-[13px] leading-relaxed text-ink-muted">
+            Кабінети завжди показані всі — незалежно від обраного фільтра.
+          </p>
+        </Section>
+      )}
+
+      {/* Сезонність: 12 місяців поруч. Показуємо в режимі «Рік», де це і є
+          головний зріз, — у місяці такий графік лише дублював би дні. */}
+      {data.period === "year" && (
+        <Section title="Виручка по місяцях">
+          <div className="px-5 py-5">
+            <BarList
+              items={data.months.map((m) => ({
+                key: `${m.year}-${m.month}`,
+                label: MONTHS_SHORT[m.month],
+                value: m.revenue,
+                display: m.revenue > 0 ? formatMoney(m.revenue) : "—",
+              }))}
+              emptyHint="Виконаних візитів за рік не було."
+            />
+          </div>
+        </Section>
+      )}
 
       {data.days.length > 1 && (
         <Section title={`Виручка по днях · ${periodUnit(data.period)}`}>
@@ -215,7 +397,7 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
                   />
                 </div>
                 <p className="tnum mt-2 text-[13px] text-ink-muted">
-                  {s.count} {s.count === 1 ? "візит" : s.count < 5 ? "візити" : "візитів"}
+                  {s.count} {visitWord(s.count)}
                   {" · "}
                   {s.share}% доходу · середній чек {formatMoney(s.averageCheck)}
                 </p>
@@ -225,6 +407,32 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
         )}
       </Section>
     </>
+  );
+}
+
+/** Спільний вигляд вкладки в перемикачах періоду й кабінету. */
+function tabCls(active: boolean): string {
+  return [
+    "min-w-0 flex-1 rounded-full px-3 py-2.5 text-center text-[14px] whitespace-nowrap",
+    "transition-colors duration-200",
+    active ? "bg-ink text-white" : "text-ink-muted hover:text-ink",
+  ].join(" ");
+}
+
+function Arrow({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={direction === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} />
+    </svg>
   );
 }
 
@@ -367,23 +575,44 @@ function SplitBar({ fresh, returning }: { fresh: number; returning: number }) {
   );
 }
 
-const MONTH_ABBR = [
-  "січ", "лют", "бер", "кві", "тра", "чер",
-  "лип", "сер", "вер", "жов", "лис", "гру",
-];
-
 /**
  * Підпис смуги. У межах тижня/місяця це число місяця; у річному розрізі —
  * скорочена назва місяця.
  */
 function dayLabel(date: Date, period: Period): string {
-  if (period === "year") return MONTH_ABBR[date.getMonth()];
+  if (period === "year") return MONTHS_SHORT[date.getMonth()];
   return String(date.getDate());
 }
 
 /** Що саме нумерують підписи — щоб «3» не читалось як порядковий номер. */
 function periodUnit(period: Period): string {
   return period === "year" ? "місяці" : "числа місяця";
+}
+
+/** «візит / візити / візитів» — щоб цифра читалась як речення. */
+function visitWord(count: number): string {
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 14) return "візитів";
+  const mod10 = count % 10;
+  if (mod10 === 1) return "візит";
+  if (mod10 >= 2 && mod10 <= 4) return "візити";
+  return "візитів";
+}
+
+/**
+ * Словесний підсумок порівняння з торішнім періодом.
+ *
+ * `null` означає, що торік виручки не було взагалі — відсоток тут не рахується
+ * (ділення на нуль), і чесніше сказати це словами, ніж намалювати «+∞%».
+ */
+function describeYearChange(percent: number | null): string {
+  if (percent === null) {
+    return "Торік у цей період виручки не було — порівнювати нема з чим.";
+  }
+  if (percent === 0) return "Виручка така сама, як торік.";
+  return percent > 0
+    ? `Виручка більша за торішню на ${percent}%.`
+    : `Виручка менша за торішню на ${Math.abs(percent)}%.`;
 }
 
 export { PERIOD_NOUN };

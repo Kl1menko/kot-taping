@@ -22,6 +22,11 @@ export type Countable = {
   client_id: string;
   service_id: string;
   source: string;
+  /**
+   * Кабінет. Не обов'язкове поле в типі, бо частина запитів (наприклад, карта
+   * перших візитів) його не читає — але для розбивки по містах воно потрібне.
+   */
+  location_id?: string;
 };
 
 /**
@@ -279,4 +284,83 @@ export function byHour(items: Countable[]): { hour: number; count: number }[] {
     { length: WORK_END_HOUR - WORK_START_HOUR },
     (_, i) => WORK_START_HOUR + i,
   ).map((hour) => ({ hour, count: counts.get(hour) ?? 0 }));
+}
+
+export type LocationStat = {
+  id: string;
+  city: string;
+  count: number;
+  revenue: number;
+  averageCheck: number;
+  /** Частка у виручці періоду, 0–100. */
+  share: number;
+};
+
+/**
+ * Розбивка по кабінетах.
+ *
+ * Кабінети показуємо всі, навіть із нулем: порожній Київ — це теж факт, і він
+ * має бути видимим, а не зникати зі звіту разом із питанням «чому там нуль».
+ */
+export function byLocation(
+  items: Countable[],
+  cities: Map<string, string>,
+): LocationStat[] {
+  const map = new Map<string, { count: number; revenue: number }>();
+  for (const id of cities.keys()) map.set(id, { count: 0, revenue: 0 });
+
+  for (const a of items) {
+    if (!isEarned(a)) continue;
+    if (!a.location_id) continue;
+    const entry = map.get(a.location_id) ?? { count: 0, revenue: 0 };
+    entry.count += 1;
+    entry.revenue += a.price;
+    map.set(a.location_id, entry);
+  }
+
+  const total = [...map.values()].reduce((sum, e) => sum + e.revenue, 0);
+
+  return [...map]
+    .map(([id, e]) => ({
+      id,
+      city: cities.get(id) ?? "—",
+      count: e.count,
+      revenue: e.revenue,
+      averageCheck: e.count ? Math.round(e.revenue / e.count) : 0,
+      share: total ? Math.round((e.revenue / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+export type MonthBucket = {
+  /** 0–11 — індекс місяця в році. */
+  month: number;
+  year: number;
+  revenue: number;
+  count: number;
+};
+
+/**
+ * Виручка по місяцях року — стовпчики для режиму «Рік».
+ *
+ * Порожні місяці лишаємо: без них графік сезонності показував би суцільний
+ * ряд, і провал у лютому виглядав би так само, як робочий лютий.
+ */
+export function revenueByMonth(items: Countable[], year: number): MonthBucket[] {
+  const buckets: MonthBucket[] = Array.from({ length: 12 }, (_, month) => ({
+    month,
+    year,
+    revenue: 0,
+    count: 0,
+  }));
+
+  for (const a of items) {
+    const at = new Date(a.starts_at);
+    if (at.getFullYear() !== year) continue;
+    const bucket = buckets[at.getMonth()];
+    bucket.count += 1;
+    if (isEarned(a)) bucket.revenue += a.price;
+  }
+
+  return buckets;
 }
