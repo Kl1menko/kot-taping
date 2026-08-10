@@ -9,13 +9,10 @@ import {
 import { toDateTimeLocal } from "@/lib/calendar";
 import type { AppointmentWithRefs } from "@/lib/db/appointments";
 import type { LocationRow, ServiceRow } from "@/lib/db/types";
+import { INPUT_CLS } from "@/lib/form";
 import { Button } from "./ui";
 
 const INITIAL: AppointmentState = { status: "idle" };
-
-const inputCls =
-  "mt-2 block min-h-[52px] w-full rounded-2xl border border-line bg-canvas px-4 text-[16px] " +
-  "transition-colors duration-200 focus:border-ink focus:outline-none";
 
 function Field({
   label,
@@ -112,7 +109,7 @@ export function AppointmentForm({
           required
           defaultValue={appointment?.client.name ?? ""}
           autoComplete="off"
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </Field>
 
@@ -124,7 +121,7 @@ export function AppointmentForm({
           inputMode="tel"
           placeholder="+380 __ ___ __ __"
           defaultValue={appointment?.client.phone ?? ""}
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </Field>
 
@@ -134,7 +131,7 @@ export function AppointmentForm({
           required
           value={serviceId}
           onChange={(e) => pickService(e.target.value)}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         >
           {services.map((s) => (
             <option key={s.id} value={s.id}>
@@ -151,7 +148,7 @@ export function AppointmentForm({
             name="locationId"
             required
             defaultValue={appointment?.location_id ?? locations[0]?.id ?? ""}
-            className={`${inputCls} cursor-pointer`}
+            className={`${INPUT_CLS} cursor-pointer`}
           >
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
@@ -174,11 +171,12 @@ export function AppointmentForm({
           type="datetime-local"
           required
           defaultValue={toDateTimeLocal(start)}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* [&>*]:min-w-0 — колонки сітки не мають розсуватись під вміст. */}
+      <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
         <Field label="Тривалість, хв" error={state.fieldErrors?.duration}>
           <input
             name="duration"
@@ -188,7 +186,7 @@ export function AppointmentForm({
             required
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
-            className={`${inputCls} tnum`}
+            className={`${INPUT_CLS} tnum`}
           />
         </Field>
 
@@ -201,7 +199,7 @@ export function AppointmentForm({
             required
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className={`${inputCls} tnum`}
+            className={`${INPUT_CLS} tnum`}
           />
         </Field>
       </div>
@@ -218,7 +216,7 @@ export function AppointmentForm({
           name="note"
           rows={2}
           defaultValue={appointment?.note ?? ""}
-          className={`${inputCls} min-h-[80px] resize-y py-3 leading-relaxed`}
+          className={`${INPUT_CLS} min-h-[80px] resize-y py-3 leading-relaxed`}
         />
       </Field>
 

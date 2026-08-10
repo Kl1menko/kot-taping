@@ -15,12 +15,10 @@ import type { ClientWithStats } from "@/lib/db/clients";
 import { StatusBadge } from "./ui";
 import { Sheet } from "./sheet";
 import { Button, Chip, EmptyState, formatMoney } from "./ui";
+import { INPUT_CLS } from "@/lib/form";
 
 const INITIAL: ClientState = { status: "idle" };
 
-const inputCls =
-  "mt-2 block min-h-[52px] w-full rounded-2xl border border-line bg-canvas px-4 text-[16px] " +
-  "transition-colors duration-200 focus:border-ink focus:outline-none";
 
 export function ClientsScreen({ clients }: { clients: ClientWithStats[] }) {
   const [query, setQuery] = useState("");
@@ -254,7 +252,7 @@ function ClientDetails({
             name="notes"
             rows={4}
             defaultValue={client.notes ?? ""}
-            className={`${inputCls} min-h-[104px] resize-y py-3 leading-relaxed`}
+            className={`${INPUT_CLS} min-h-[104px] resize-y py-3 leading-relaxed`}
           />
         </label>
 
@@ -346,7 +344,7 @@ function ClientEditForm({
           type="text"
           required
           defaultValue={client.name}
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </label>
 
@@ -357,7 +355,7 @@ function ClientEditForm({
           type="tel"
           required
           defaultValue={client.phone}
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </label>
 
@@ -369,7 +367,7 @@ function ClientEditForm({
           name="email"
           type="email"
           defaultValue={client.email ?? ""}
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </label>
 

@@ -14,6 +14,7 @@ import type { RequestWithService } from "@/lib/db/requests";
 import type { RequestStatus, ServiceRow } from "@/lib/db/types";
 import { Sheet } from "./sheet";
 import { Button, Chip, EmptyState, formatMoney } from "./ui";
+import { INPUT_CLS } from "@/lib/form";
 
 const FILTERS: { id: RequestStatus | "all"; label: string }[] = [
   { id: "new", label: "Нові" },
@@ -195,9 +196,6 @@ function Submit() {
 
 const INITIAL: ConvertState = { status: "idle" };
 
-const inputCls =
-  "mt-2 block min-h-[52px] w-full rounded-2xl border border-line bg-canvas px-4 text-[16px] " +
-  "transition-colors duration-200 focus:border-ink focus:outline-none";
 
 function RequestDetails({
   request,
@@ -303,11 +301,11 @@ function RequestDetails({
               type="datetime-local"
               required
               defaultValue={toDateTimeLocal(suggested)}
-              className={`${inputCls} cursor-pointer`}
+              className={`${INPUT_CLS} cursor-pointer`}
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
             <label className="block">
               <span className="text-[14px] text-ink-muted">Тривалість, хв</span>
               <input
@@ -317,7 +315,7 @@ function RequestDetails({
                 step={5}
                 required
                 defaultValue={service?.duration_min ?? 60}
-                className={`${inputCls} tnum`}
+                className={`${INPUT_CLS} tnum`}
               />
             </label>
             <label className="block">
@@ -329,7 +327,7 @@ function RequestDetails({
                 step={50}
                 required
                 defaultValue={service?.price ?? 0}
-                className={`${inputCls} tnum`}
+                className={`${INPUT_CLS} tnum`}
               />
             </label>
           </div>

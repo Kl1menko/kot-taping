@@ -6,6 +6,7 @@ import { submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, SERVICES, formatPrice } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
+import { INPUT_CLS } from "@/lib/form";
 
 const INITIAL: BookingState = { status: "idle" };
 
@@ -36,9 +37,6 @@ function Field({
   );
 }
 
-const inputCls =
-  "mt-2 block min-h-[52px] w-full rounded-2xl border border-line bg-canvas px-4 text-[16px] " +
-  "transition-colors duration-200 focus:border-ink focus:outline-none";
 
 function SubmitButton({ full }: { full?: boolean }) {
   const { pending } = useFormStatus();
@@ -155,7 +153,7 @@ export function BookingForm({
           required
           autoComplete="name"
           aria-invalid={Boolean(state.fieldErrors?.name)}
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </Field>
 
@@ -172,7 +170,7 @@ export function BookingForm({
           autoComplete="tel"
           placeholder="+380 __ ___ __ __"
           aria-invalid={Boolean(state.fieldErrors?.phone)}
-          className={inputCls}
+          className={INPUT_CLS}
         />
       </Field>
 
@@ -182,7 +180,7 @@ export function BookingForm({
           required
           defaultValue={preselected}
           aria-invalid={Boolean(state.fieldErrors?.service)}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         >
           <option value="" disabled>
             Оберіть послугу
@@ -205,7 +203,7 @@ export function BookingForm({
           required
           defaultValue=""
           aria-invalid={Boolean(state.fieldErrors?.location)}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         >
           <option value="" disabled>
             Оберіть місто
@@ -224,7 +222,7 @@ export function BookingForm({
           type="date"
           required
           aria-invalid={Boolean(state.fieldErrors?.date)}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         />
       </Field>
 
@@ -232,7 +230,7 @@ export function BookingForm({
         <textarea
           name="note"
           rows={3}
-          className={`${inputCls} min-h-[96px] resize-y py-3 leading-relaxed`}
+          className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
         />
       </Field>
 

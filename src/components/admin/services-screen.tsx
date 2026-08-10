@@ -13,12 +13,10 @@ import { durationLabel } from "@/lib/calendar";
 import type { ServiceRow } from "@/lib/db/types";
 import { Sheet } from "./sheet";
 import { Button, Chip, EmptyState, formatMoney } from "./ui";
+import { INPUT_CLS } from "@/lib/form";
 
 const INITIAL: ServiceState = { status: "idle" };
 
-const inputCls =
-  "mt-2 block min-h-[52px] w-full rounded-2xl border border-line bg-canvas px-4 text-[16px] " +
-  "transition-colors duration-200 focus:border-ink focus:outline-none";
 
 export function ServicesScreen({ services }: { services: ServiceRow[] }) {
   const [query, setQuery] = useState("");
@@ -272,7 +270,7 @@ function ServiceForm({
           type="text"
           required
           defaultValue={service?.title ?? ""}
-          className={inputCls}
+          className={INPUT_CLS}
         />
         {state.fieldErrors?.title && (
           <span role="alert" className="mt-1.5 block text-[13px] text-[#b3261e]">
@@ -287,7 +285,7 @@ function ServiceForm({
           name="summary"
           rows={3}
           defaultValue={service?.summary ?? ""}
-          className={`${inputCls} min-h-[88px] resize-y py-3 leading-relaxed`}
+          className={`${INPUT_CLS} min-h-[88px] resize-y py-3 leading-relaxed`}
         />
       </label>
 
@@ -297,7 +295,7 @@ function ServiceForm({
           name="category"
           required
           defaultValue={service?.category ?? CATEGORIES[0].id}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         >
           {CATEGORIES.map((c) => (
             <option key={c.id} value={c.id}>
@@ -312,7 +310,7 @@ function ServiceForm({
         )}
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
         <label className="block">
           <span className="text-[14px] text-ink-muted">Ціна, ₴</span>
           <input
@@ -322,7 +320,7 @@ function ServiceForm({
             step={50}
             required
             defaultValue={service?.price ?? 0}
-            className={`${inputCls} tnum`}
+            className={`${INPUT_CLS} tnum`}
           />
           {state.fieldErrors?.price && (
             <span role="alert" className="mt-1.5 block text-[13px] text-[#b3261e]">
@@ -340,7 +338,7 @@ function ServiceForm({
             step={5}
             required
             defaultValue={service?.duration_min ?? 60}
-            className={`${inputCls} tnum`}
+            className={`${INPUT_CLS} tnum`}
           />
           {state.fieldErrors?.duration && (
             <span role="alert" className="mt-1.5 block text-[13px] text-[#b3261e]">
@@ -360,7 +358,7 @@ function ServiceForm({
         Ціна «від» — залежить від обсягу роботи
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
         <label className="block">
           <span className="text-[14px] text-ink-muted">Носіння</span>
           <input
@@ -368,7 +366,7 @@ function ServiceForm({
             type="text"
             placeholder="5–10 днів"
             defaultValue={service?.wear ?? ""}
-            className={inputCls}
+            className={INPUT_CLS}
           />
         </label>
 
@@ -379,7 +377,7 @@ function ServiceForm({
             type="text"
             placeholder="Курс 5 процедур"
             defaultValue={service?.badge ?? ""}
-            className={inputCls}
+            className={INPUT_CLS}
           />
         </label>
       </div>
@@ -389,7 +387,7 @@ function ServiceForm({
         <select
           name="tone"
           defaultValue={service?.tone ?? "sand"}
-          className={`${inputCls} cursor-pointer`}
+          className={`${INPUT_CLS} cursor-pointer`}
         >
           <option value="sand">Пісок</option>
           <option value="clay">Глина</option>
