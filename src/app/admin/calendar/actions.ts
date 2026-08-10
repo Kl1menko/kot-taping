@@ -175,22 +175,34 @@ export async function deleteAppointment(id: string) {
   revalidatePath("/admin");
 }
 
-/** «Повторити запис» — той самий клієнт і послуга, нова дата. */
+/**
+ * «Повторити запис» — той самий клієнт, послуга й кабінет, нова дата.
+ *
+ * `location_id` копіюємо з джерела: колонка обов'язкова (міграція 0002), тож
+ * без неї вставка падає, а не «просто лишає кабінет порожнім». Курс — це
+ * серія візитів в одному місці, тож копія кабінету тут і по суті правильна.
+ */
 export async function repeatAppointment(id: string, startsAt: string) {
   await requireSession();
 
   const { data: source, error: readError } = await db()
     .from("appointments")
-    .select("client_id, service_id, duration_min, price")
+    .select("client_id, service_id, location_id, duration_min, price")
     .eq("id", id)
     .single();
 
   if (readError) throw new Error(`Не вдалося прочитати запис: ${readError.message}`);
 
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error("Некоректна дата повторного запису.");
+  }
+
   const { error } = await db().from("appointments").insert({
     client_id: source.client_id,
     service_id: source.service_id,
-    starts_at: new Date(startsAt).toISOString(),
+    location_id: source.location_id,
+    starts_at: start.toISOString(),
     duration_min: source.duration_min,
     price: source.price,
     status: "planned",
@@ -200,6 +212,7 @@ export async function repeatAppointment(id: string, startsAt: string) {
   if (error) throw new Error(`Не вдалося повторити запис: ${error.message}`);
 
   revalidatePath("/admin/calendar");
+  revalidatePath("/admin");
 }
 
 /** Використовує клієнтська форма, щоб підставити телефон у канонічному вигляді. */

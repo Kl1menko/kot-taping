@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/login/actions";
 
 const LINKS = [
-  { href: "/admin", label: "Огляд" },
+  { href: "/admin", label: "Сьогодні" },
   { href: "/admin/requests", label: "Заявки" },
   { href: "/admin/calendar", label: "Календар" },
   { href: "/admin/clients", label: "Клієнти" },

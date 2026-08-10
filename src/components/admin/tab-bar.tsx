@@ -29,6 +29,16 @@ function Icon({ children }: { children: ReactNode }) {
 
 const TABS = [
   {
+    href: "/admin",
+    label: "Сьогодні",
+    icon: (
+      <Icon>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7.5V12l3 1.8" />
+      </Icon>
+    ),
+  },
+  {
     href: "/admin/calendar",
     label: "Записи",
     icon: (
@@ -90,7 +100,12 @@ export function TabBar() {
     >
       <ul className="flex">
         {TABS.map((tab) => {
-          const active = pathname.startsWith(tab.href);
+          // «Сьогодні» — точний збіг: startsWith("/admin") підсвічував би цю
+          // вкладку на кожному екрані адмінки.
+          const active =
+            tab.href === "/admin"
+              ? pathname === "/admin"
+              : pathname.startsWith(tab.href);
           return (
             <li key={tab.href} className="flex-1">
               <Link

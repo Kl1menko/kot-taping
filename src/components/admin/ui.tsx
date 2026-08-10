@@ -1,7 +1,17 @@
-"use client";
+/**
+ * Спільні елементи адмінки.
+ *
+ * Модуль свідомо БЕЗ "use client": тут лише розмітка й форматування, жодних
+ * обробників. Директива на весь файл робила ці утиліти недоступними серверним
+ * компонентам — виклик `formatMoney()` із сервера падав у рантаймі, хоча
+ * збірка проходила. Інтерактивний `Button` тепер живе в ./button.tsx і
+ * ре-експортується звідси, щоб наявні імпорти лишились робочими.
+ */
 
 import type { ReactNode } from "react";
 import type { AppointmentStatus } from "@/lib/db/types";
+
+export { Button } from "./button";
 
 /** Панель — базова поверхня адмінки поверх сірого полотна. */
 export function Panel({
@@ -64,46 +74,6 @@ export function Chip({
     >
       {children}
     </span>
-  );
-}
-
-export function Button({
-  children,
-  onClick,
-  type = "button",
-  tone = "dark",
-  full,
-  disabled,
-  className = "",
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  type?: "button" | "submit";
-  tone?: "dark" | "light" | "danger";
-  full?: boolean;
-  disabled?: boolean;
-  className?: string;
-}) {
-  const tones = {
-    dark: "bg-ink text-white hover:bg-[#2a2a2a]",
-    light: "border border-line text-ink hover:border-ink",
-    danger: "border border-[#e6c9c6] text-[#b3261e] hover:bg-blush",
-  };
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={[
-        "inline-flex min-h-[52px] cursor-pointer items-center justify-center gap-2 rounded-full px-6 text-[15px]",
-        "transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50",
-        tones[tone],
-        full ? "w-full" : "",
-        className,
-      ].join(" ")}
-    >
-      {children}
-    </button>
   );
 }
 

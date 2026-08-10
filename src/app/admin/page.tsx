@@ -1,47 +1,42 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
+import { listAppointments } from "@/lib/db/appointments";
+import { dayRange, dayTitle } from "@/lib/calendar";
+import { TodayList } from "@/components/admin/today-list";
+
+export const metadata = { title: "Сьогодні" };
 
 // Персональні дані й лічильники, що змінюються щохвилини — кешувати нічого.
 export const dynamic = "force-dynamic";
 
 async function counts() {
   const supabase = db();
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(startOfToday);
-  endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const [newRequests, todayAppointments, clients, activeServices] =
-    await Promise.all([
-      supabase
-        .from("requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "new"),
-      supabase
-        .from("appointments")
-        .select("*", { count: "exact", head: true })
-        .gte("starts_at", startOfToday.toISOString())
-        .lt("starts_at", endOfToday.toISOString())
-        .eq("status", "planned"),
-      supabase.from("clients").select("*", { count: "exact", head: true }),
-      supabase
-        .from("services")
-        .select("*", { count: "exact", head: true })
-        .eq("is_active", true),
-    ]);
+  const [newRequests, clients, activeServices] = await Promise.all([
+    supabase
+      .from("requests")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "new"),
+    supabase.from("clients").select("*", { count: "exact", head: true }),
+    supabase
+      .from("services")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true),
+  ]);
+
+  // Помилку не ковтаємо: її ловить error.tsx і показує зрозумілий екран із
+  // кнопкою «Спробувати ще». Раніше сторінка малювала власне повідомлення —
+  // тепер це дублювання, до того ж без можливості повторити запит.
+  const failure = newRequests.error ?? clients.error ?? activeServices.error;
+  if (failure) {
+    throw new Error(`Не вдалося прочитати дані: ${failure.message}`);
+  }
 
   return {
     newRequests: newRequests.count ?? 0,
-    todayAppointments: todayAppointments.count ?? 0,
     clients: clients.count ?? 0,
     activeServices: activeServices.count ?? 0,
-    error:
-      newRequests.error ??
-      todayAppointments.error ??
-      clients.error ??
-      activeServices.error ??
-      null,
   };
 }
 
@@ -68,33 +63,32 @@ function Tile({
 export default async function AdminHome() {
   await requireSession();
 
-  const data = await counts();
+  const now = new Date();
+  const { start, end } = dayRange(now);
 
-  if (data.error) {
-    return (
-      <>
-        <h1 className="text-[28px] leading-tight">Огляд</h1>
-        <div className="mt-8 rounded-[var(--radius-tile)] bg-surface p-6">
-          <p className="text-[16px]">Не вдалося прочитати базу.</p>
-          <p className="mt-2 text-[15px] leading-relaxed text-ink-muted">
-            {data.error.message}
-          </p>
-          <p className="mt-4 text-[15px] leading-relaxed text-ink-muted">
-            Перевірте, що міграція <code>supabase/migrations/0001_init.sql</code>{" "}
-            виконана, а <code>SUPABASE_URL</code> і{" "}
-            <code>SUPABASE_SERVICE_ROLE_KEY</code> у <code>.env.local</code>{" "}
-            правильні.
-          </p>
-        </div>
-      </>
-    );
-  }
+  // Кількість записів на сьогодні окремим запитом не рахуємо: список усе одно
+  // їх читає, тож беремо довжину звідти.
+  const [data, today] = await Promise.all([
+    counts(),
+    listAppointments(start, end),
+  ]);
+
+  const planned = today.filter((a) => a.status !== "cancelled").length;
 
   return (
     <>
-      <h1 className="text-[28px] leading-tight">Огляд</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h1 className="text-[24px] leading-tight sm:text-[28px]">Сьогодні</h1>
+        <span className="text-[15px] text-ink-muted">{dayTitle(now)}</span>
+      </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Головне питання екрана — «що в мене зараз», тож список іде перед
+          лічильниками, а не після них. */}
+      <div className="mt-6">
+        <TodayList appointments={today} now={now} />
+      </div>
+
+      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile
           label="Нові заявки"
           value={data.newRequests}
@@ -102,7 +96,7 @@ export default async function AdminHome() {
         />
         <Tile
           label="Записів сьогодні"
-          value={data.todayAppointments}
+          value={planned}
           href="/admin/calendar"
         />
         <Tile label="Клієнтів" value={data.clients} href="/admin/clients" />
@@ -111,15 +105,6 @@ export default async function AdminHome() {
           value={data.activeServices}
           href="/admin/services"
         />
-      </div>
-
-      <div className="mt-6">
-        <Link
-          href="/admin/calendar"
-          className="inline-flex min-h-[52px] items-center rounded-full bg-ink px-7 text-[15px] text-white transition-colors duration-200 hover:bg-[#2a2a2a]"
-        >
-          Відкрити календар
-        </Link>
       </div>
     </>
   );
