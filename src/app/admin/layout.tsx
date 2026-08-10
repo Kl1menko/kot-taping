@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/nav";
+import { LiveRefresh } from "@/components/admin/live-refresh";
 import { TabBar } from "@/components/admin/tab-bar";
 
 export const metadata: Metadata = {
@@ -22,6 +23,8 @@ export default function AdminLayout({
     // overflow-x-clip — страховка: горизонтально скролять лише смуги з
     // власним overflow (стрічка дат), а не сторінка цілком.
     <div className="min-h-dvh overflow-x-clip bg-canvas">
+      <LiveRefresh />
+
       <header className="hidden border-b border-line bg-surface md:block">
         <div className="mx-auto flex w-full max-w-[1360px] items-center gap-6 px-5 py-4 md:px-10">
           <Link href="/admin" className="text-[15px] whitespace-nowrap">
