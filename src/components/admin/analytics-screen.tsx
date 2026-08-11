@@ -186,7 +186,10 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
         </Panel>
       ) : null}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {/* Дві колонки вже на телефоні: чотири плитки в один стовпчик займали
+          майже весь екран, і графіки нижче — головне на цій сторінці —
+          починались аж за межею видимості. */}
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
         <Kpi
           label="всього візитів"
           value={String(data.totals.appointments)}
@@ -464,13 +467,18 @@ function Kpi({
   change?: number | null;
 }) {
   return (
-    <Panel className="p-5">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="tnum text-[28px] leading-none">{value}</span>
+    <Panel className="p-4 sm:p-5">
+      {/* Підпис зверху, число під ним: у вузькій колонці «71 300 ₴» і значок
+          зміни в один рядок не вміщались, і рядок переносився — плитка росла
+          вдвічі. Тепер значок стоїть біля підпису, де місця вистачає. */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-[13px] text-ink-muted sm:text-[14px]">
+          {label}
+        </p>
         {change !== null && change !== undefined && (
           <span
             className={[
-              "tnum rounded-full px-2 py-0.5 text-[13px]",
+              "tnum shrink-0 rounded-full px-2 py-0.5 text-[12px]",
               change >= 0 ? "bg-sand text-ink" : "bg-blush text-ink",
             ].join(" ")}
           >
@@ -478,7 +486,9 @@ function Kpi({
           </span>
         )}
       </div>
-      <p className="mt-2 text-[14px] text-ink-muted">{label}</p>
+      <p className="tnum mt-2 text-[22px] leading-none sm:text-[26px]">
+        {value}
+      </p>
     </Panel>
   );
 }
