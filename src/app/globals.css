@@ -141,6 +141,19 @@
   }
 }
 
+/* Картка у віялі галереї.
+   Ширина й перекриття приходять змінними з компонента (див. fanStyle): вони
+   рахуються від кількості карток, тож ряд вписується в будь-яку ширину — від
+   390px телефона до десктопа — і крайні картки не вилазять за край. */
+.gallery-card {
+  flex: 0 0 var(--fan-card);
+  width: var(--fan-card);
+}
+
+.gallery-card + .gallery-card {
+  margin-left: calc(-1 * var(--fan-overlap));
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* No intro at all — show the page immediately. */
   .preloader {
