@@ -103,6 +103,14 @@ export type ResultRow = {
   created_at: string;
 };
 
+/** Лічильник спроб входу — міграція 0004. Рядок один на ключ. */
+export type LoginAttemptRow = {
+  key: string;
+  count: number;
+  window_end: string;
+  updated_at: string;
+};
+
 /** Мапа для типізації `supabase.from(...)`. */
 export type Database = {
   public: {
@@ -115,9 +123,30 @@ export type Database = {
       faq_items: Table<FaqRow>;
       testimonials: Table<TestimonialRow>;
       results: Table<ResultRow>;
+      /**
+       * Ключ тут `key`, а не `id`, тож шаблон `Table<>` не підходить.
+       * Пишемо напряму — до таблиці ми і так ходимо лише через RPC.
+       */
+      login_attempts: {
+        Row: LoginAttemptRow;
+        Insert: Partial<LoginAttemptRow> & { key: string };
+        Update: Partial<LoginAttemptRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      /** Міграція 0004: атомарний лічильник спроб входу. */
+      register_login_attempt: {
+        Args: {
+          attempt_key: string;
+          max_attempts: number;
+          window_seconds: number;
+        };
+        /** true — спроба вже за межею ліміту. */
+        Returns: boolean;
+      };
+    };
     Enums: {
       appointment_status: AppointmentStatus;
       request_status: RequestStatus;
