@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types --no-warnings \"src/**/*.test.ts\"",
+    "test": "npm run test:unit && npm run test:tz",
+    "test:unit": "TZ=Europe/Kyiv node --test --experimental-strip-types --no-warnings \"src/**/!(*.tz).test.ts\"",
+    "test:tz": "TZ=UTC node --test --experimental-strip-types --no-warnings \"src/**/*.tz.test.ts\"",
     "admin:hash": "node scripts/hash-password.mjs",
     "db:seed": "node --experimental-strip-types --no-warnings scripts/seed.mjs",
     "db:demo": "node scripts/seed-demo.mjs"
