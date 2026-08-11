@@ -127,28 +127,27 @@ export default async function AnalyticsPage({
     anchor,
   );
 
-  const locations = await listLocations();
-  // Невідомий slug ігноруємо — показуємо всі кабінети, а не порожній екран.
-  const activeLocation = locations.some((l) => l.slug === location)
-    ? (location as string)
-    : "";
-  const activeLocationId =
-    locations.find((l) => l.slug === activeLocation)?.id ?? null;
-
-  /** Записи в межах періоду; фільтр кабінету застосовується там, де доречно. */
-  const appointmentsIn = (from: Date, to: Date, filtered = true) => {
-    let q = db()
+  /**
+   * Записи в межах періоду — без фільтра кабінету.
+   *
+   * Раніше фільтр ішов у сам запит, і через це список кабінетів доводилось
+   * читати першим та окремо: без нього не було `location_id`. Той один запит
+   * (~100 мс) затримував старт усіх восьми наступних.
+   *
+   * Тепер кабінети їдуть у тому ж `Promise.all`, а фільтр застосовується в
+   * пам'яті — `location_id` і так є у вибірці. Дані за період — це десятки
+   * рядків, тож фільтрація тут нічого не коштує.
+   */
+  const appointmentsIn = (from: Date, to: Date) =>
+    db()
       .from("appointments")
       .select(SELECT)
       .gte("starts_at", from.toISOString())
       .lt("starts_at", to.toISOString());
-    if (filtered && activeLocationId) q = q.eq("location_id", activeLocationId);
-    return q;
-  };
 
   const [
-    current,
-    allCabinets,
+    locations,
+    periodRows,
     previous,
     lastYear,
     yearWide,
@@ -156,10 +155,12 @@ export default async function AnalyticsPage({
     firstVisits,
     requests,
   ] = await Promise.all([
+    listLocations(),
+    // Один запит на період замість двох. Раніше той самий діапазон читався
+    // двічі: з фільтром міста (для показників) і без нього (для секції
+    // «Кабінети», яка порівнює міста між собою). Тепер тягнемо раз без фільтра
+    // й ділимо в пам'яті — див. `current` нижче.
     appointmentsIn(start, end),
-    // Той самий період, але без фільтра міста: секція «Кабінети» порівнює їх
-    // між собою, тож із фільтром вона показувала б нулі в усіх інших містах.
-    appointmentsIn(start, end, false),
     appointmentsIn(prevStart, prevEnd),
     appointmentsIn(yearStart, yearEnd),
     // Весь рік якірної дати — для стовпчиків сезонності. У режимі «Рік» це той
@@ -187,8 +188,7 @@ export default async function AnalyticsPage({
   ]);
 
   const failure =
-    current.error ??
-    allCabinets.error ??
+    periodRows.error ??
     previous.error ??
     lastYear.error ??
     yearWide.error ??
@@ -199,9 +199,26 @@ export default async function AnalyticsPage({
     throw new Error(`Не вдалося прочитати дані: ${failure.message}`);
   }
 
-  const items = (current.data ?? []) as Countable[];
-  const prevItems = (previous.data ?? []) as Countable[];
-  const lastYearItems = (lastYear.data ?? []) as Countable[];
+  // Невідомий slug ігноруємо — показуємо всі кабінети, а не порожній екран.
+  const activeLocation = locations.some((l) => l.slug === location)
+    ? (location as string)
+    : "";
+  const activeLocationId =
+    locations.find((l) => l.slug === activeLocation)?.id ?? null;
+
+  /** Фільтр кабінету — тепер у пам'яті, а не в запиті. */
+  const onlyActive = (rows: Countable[]): Countable[] =>
+    activeLocationId
+      ? rows.filter((r) => r.location_id === activeLocationId)
+      : rows;
+
+  // Увесь період без фільтра: секція «Кабінети» порівнює міста між собою, тож
+  // із фільтром вона показувала б нулі в усіх інших містах.
+  const allCabinets = (periodRows.data ?? []) as Countable[];
+
+  const items = onlyActive(allCabinets);
+  const prevItems = onlyActive((previous.data ?? []) as Countable[]);
+  const lastYearItems = onlyActive((lastYear.data ?? []) as Countable[]);
 
   const firstVisitByClient = new Map<string, string>();
   for (const row of firstVisits.data ?? []) {
@@ -241,7 +258,7 @@ export default async function AnalyticsPage({
     },
     days: revenueByDay(items, start, end),
     months: revenueByMonth(
-      (yearWide.data ?? []) as Countable[],
+      onlyActive((yearWide.data ?? []) as Countable[]),
       anchor.getFullYear(),
     ),
     services: byService(
@@ -249,7 +266,7 @@ export default async function AnalyticsPage({
       new Map((services.data ?? []).map((s) => [s.id, s.title])),
     ),
     byLocation: byLocation(
-      (allCabinets.data ?? []) as Countable[],
+      allCabinets,
       new Map(locations.map((l) => [l.id, l.city])),
     ),
     clients: clientSplit(items, firstVisitByClient, start, end),

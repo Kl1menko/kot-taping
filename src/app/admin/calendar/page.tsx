@@ -30,17 +30,28 @@ export default async function CalendarPage({
   // вирішуючи, чи потрібен новий запит при кроці стрілкою (див. loadedRange).
   const { start, end } = loadedRange(selected);
 
-  const locations = await listLocations();
+  // Три запити одночасно.
+  //
+  // Кабінети раніше читались окремо й до решти — бо від них залежить, чи
+  // застосовувати фільтр міста. Але цю залежність не треба чекати в мережі:
+  // записи тягнемо за весь діапазон без фільтра, а місто відсіюємо в пам'яті
+  // (так робить і сам `listAppointments` — `.eq` по вкладеній таблиці рядків
+  // не прибирає). Заразом це прибирає пастку з невідомим slug: він тепер не
+  // може дати порожній екран замість «усі кабінети».
+  const [locations, allAppointments, servicesResult] = await Promise.all([
+    listLocations(),
+    listAppointments(start, end),
+    db().from("services").select("*").eq("is_active", true).order("sort"),
+  ]);
 
   // Невідомий slug у URL ігноруємо — показуємо всі кабінети, а не порожньо.
   const activeLocation = locations.some((l) => l.slug === location)
     ? (location as string)
     : "";
 
-  const [appointments, servicesResult] = await Promise.all([
-    listAppointments(start, end, activeLocation || undefined),
-    db().from("services").select("*").eq("is_active", true).order("sort"),
-  ]);
+  const appointments = activeLocation
+    ? allAppointments.filter((a) => a.location?.slug === activeLocation)
+    : allAppointments;
 
   if (servicesResult.error) {
     throw new Error(`Не вдалося прочитати прайс: ${servicesResult.error.message}`);
