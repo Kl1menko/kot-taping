@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/session";
-import { updateClient, updateClientNotes } from "@/lib/db/clients";
-import { isValidPhone } from "@/lib/phone";
+import {
+  createClient,
+  findClientByPhone,
+  updateClient,
+  updateClientNotes,
+} from "@/lib/db/clients";
+import { formatPhone, isValidPhone } from "@/lib/phone";
 
 export type ClientState = {
   status: "idle" | "success" | "error";
@@ -64,4 +69,58 @@ export async function saveClient(
   revalidatePath("/admin/clients");
   revalidatePath("/admin/calendar");
   return { status: "success", message: "Клієнта оновлено." };
+}
+
+/**
+ * Створення клієнтки вручну — до першого запису.
+ *
+ * Зазвичай клієнтки з'являються самі: із заявки з сайту або при створенні
+ * запису (`upsertClient`). Але картка потрібна й раніше — записати номер із
+ * дзвінка, завести нотатку про протипокази перед візитом.
+ *
+ * Телефон — природний ключ (unique у міграції 0001), тож повторний номер тут
+ * не помилка бази, а звичайна ситуація: майстриня не пам'ятає, чи заводила цю
+ * людину. Кажемо про це людською мовою і називаємо ім'я, під яким вона вже є.
+ */
+export async function createClientAction(
+  _prev: ClientState,
+  formData: FormData,
+): Promise<ClientState> {
+  await requireSession();
+
+  const name = String(formData.get("name") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (name.length < 2) {
+    return { status: "error", message: "Вкажіть ім'я — щонайменше 2 символи." };
+  }
+  if (!isValidPhone(phone)) {
+    return { status: "error", message: "Номер у форматі +380 XX XXX XX XX." };
+  }
+
+  // Перевіряємо до вставки, щоб дати зрозуміле повідомлення замість
+  // «duplicate key value violates unique constraint».
+  const existing = await findClientByPhone(phone);
+  if (existing) {
+    return {
+      status: "error",
+      message:
+        `Номер ${formatPhone(phone)} уже записаний за «${existing.name}». ` +
+        "Знайдіть цю картку пошуком, щоб не заводити другу.",
+    };
+  }
+
+  try {
+    await createClient({ name, phone, email, notes });
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Не вдалося зберегти.",
+    };
+  }
+
+  revalidatePath("/admin/clients");
+  return { status: "success", message: "Клієнтку додано." };
 }

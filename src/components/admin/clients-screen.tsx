@@ -3,11 +3,13 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
+  createClientAction,
   saveClient,
   saveClientNotes,
   type ClientState,
 } from "@/app/admin/clients/actions";
 import { loadClientHistory } from "@/app/admin/clients/history";
+import { searchClientsAction } from "@/app/admin/clients/search";
 import { dayTitle, timeLabel } from "@/lib/calendar";
 import { formatPhone, phoneMatches } from "@/lib/phone";
 import type { AppointmentWithRefs } from "@/lib/db/appointments";
@@ -20,13 +22,30 @@ import { INPUT_CLS } from "@/lib/form";
 const INITIAL: ClientState = { status: "idle" };
 
 
-export function ClientsScreen({ clients }: { clients: ClientWithStats[] }) {
+export function ClientsScreen({
+  clients,
+  hasMore = false,
+}: {
+  clients: ClientWithStats[];
+  /** Список упрів у ліміт — показуємо це, а не вдаємо, що клієнтів рівно стільки. */
+  hasMore?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<ClientWithStats | null>(null);
+  const [creating, setCreating] = useState(false);
+  /**
+   * Добірка з бази — лише коли завантаженої сторінки не досить (див. нижче).
+   * Тримаємо разом із запитом, щоб відкинути відповідь, яка спізнилась.
+   */
+  const [remote, setRemote] = useState<{
+    query: string;
+    rows: ClientWithStats[];
+  } | null>(null);
 
   // Фільтруємо на клієнті: список невеликий, а миттєвий відгук важливіший
-  // за економію на запиті.
-  const visible = useMemo(() => {
+  // за економію на запиті. Пошук за нотаткою можливий лише тут — у SQL ми за
+  // нотатками не шукаємо, бо це чутливе поле і воно не індексоване.
+  const local = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return clients;
     return clients.filter(
@@ -37,16 +56,88 @@ export function ClientsScreen({ clients }: { clients: ClientWithStats[] }) {
     );
   }, [clients, query]);
 
+  /**
+   * Доповнюємо локальний пошук базою, коли список обрізаний лімітом.
+   *
+   * Без цього пошук мовчки брехав би: людина, якої немає на завантаженій
+   * сторінці, не знаходилась би взагалі. Ходимо тільки якщо `hasMore` — поки
+   * база вміщається у сторінку, миттєвого фільтра досить і запит зайвий.
+   */
+  useEffect(() => {
+    const q = query.trim();
+    if (!hasMore || q.length < 2) return;
+
+    let cancelled = false;
+    // Пауза, щоб не слати запит на кожну літеру.
+    const timer = setTimeout(() => {
+      searchClientsAction(q)
+        .then((found) => {
+          // Результат зберігаємо разом із запитом, під який його отримано:
+          // поки летить відповідь, у полі вже може бути інший текст.
+          if (!cancelled) setRemote({ query: q, rows: found });
+        })
+        // Мовчки: локальний результат уже на екрані, і показувати помилку
+        // замість нього означало б зробити гірше, ніж було.
+        .catch(() => {});
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, hasMore]);
+
+  // Об'єднуємо: те, що знайшлося локально (зокрема за нотаткою), плюс те, що
+  // приїхало з бази. Дублікати прибираємо за id.
+  const visible = useMemo(() => {
+    // Застарілу відповідь (від попереднього запиту) ігноруємо.
+    const remoteRows =
+      remote && remote.query === query.trim() ? remote.rows : null;
+    if (!remoteRows) return local;
+    const merged = new Map(local.map((c) => [c.id, c]));
+    for (const c of remoteRows) merged.set(c.id, c);
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, "uk"));
+  }, [local, remote, query]);
+
   const returning = clients.filter((c) => c.visits > 1).length;
 
   return (
     <>
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[24px] leading-tight sm:text-[28px]">Клієнти</h1>
-        <span className="tnum shrink-0 text-[14px] text-ink-muted">
-          {clients.length}
-          {returning > 0 && ` · ${returning} повторних`}
-        </span>
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-tight sm:text-[28px]">Клієнти</h1>
+          <span className="tnum mt-1 block text-[14px] text-ink-muted">
+            {/* При обрізанні «500» без позначки читалось би як «усього 500». */}
+            {hasMore ? `перші ${clients.length}` : clients.length}
+            {returning > 0 && ` · ${returning} повторних`}
+          </span>
+        </div>
+
+        {/* Кнопка в заголовку, а не внизу списку: завести картку треба саме
+            тоді, коли людини в списку немає, — тобто коли шукали й не знайшли.
+
+            Сам «плюс», без підпису: значок зрозумілий і не з'їдає рядок поруч
+            із заголовком. Підпис лишається для читача з екрана — див. sr-only
+            та aria-label, інакше кнопка озвучувалась би просто як «кнопка». */}
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          aria-label="Додати клієнтку"
+          title="Додати клієнтку"
+          className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-ink text-white transition-colors duration-200 hover:bg-[#2a2a2a]"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="size-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
       </div>
 
       <div className="mt-5">
@@ -60,16 +151,34 @@ export function ClientsScreen({ clients }: { clients: ClientWithStats[] }) {
         />
       </div>
 
+      {/* Мовчазний зріз списку — найгірший варіант: людина шукає клієнтку, не
+          знаходить і робить висновок, що її в базі немає. Тому кажемо прямо. */}
+      {hasMore && (
+        <p className="mt-3 rounded-2xl bg-sand px-4 py-3 text-[14px] leading-relaxed text-ink-muted">
+          Показано перших {clients.length} клієнтів за абеткою. Якщо потрібної
+          немає в списку — введіть ім&apos;я або номер у пошук, він шукає по всій
+          базі.
+        </p>
+      )}
+
       <div className="mt-5">
         {visible.length === 0 ? (
-          <EmptyState
-            title={query ? "Нікого не знайдено" : "Клієнтів поки немає"}
-            hint={
-              query
-                ? "Спробуйте частину імені або останні цифри номера."
-                : "Клієнти з'являються автоматично, коли ви створюєте запис або приймаєте заявку."
-            }
-          />
+          <div>
+            <EmptyState
+              title={query ? "Нікого не знайдено" : "Клієнтів поки немає"}
+              hint={
+                query
+                  ? "Спробуйте частину імені або останні цифри номера — або заведіть картку."
+                  : "Клієнти з'являються автоматично, коли ви створюєте запис або приймаєте заявку."
+              }
+            />
+            {/* Саме тут людина найчастіше й розуміє, що картки ще немає. */}
+            <div className="mt-4 flex justify-center">
+              <Button tone="light" onClick={() => setCreating(true)}>
+                Додати клієнтку
+              </Button>
+            </div>
+          </div>
         ) : (
           <ul className="space-y-3">
             {visible.map((client) => (
@@ -88,6 +197,23 @@ export function ClientsScreen({ clients }: { clients: ClientWithStats[] }) {
       >
         {active && (
           <ClientDetails client={active} onClose={() => setActive(null)} />
+        )}
+      </Sheet>
+
+      <Sheet
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Нова клієнтка"
+      >
+        {/* key скидає стан форми між відкриттями: інакше після успішного
+            створення в полях лишалися б дані попередньої клієнтки. */}
+        {creating && (
+          <ClientCreateForm
+            key={String(creating)}
+            initialQuery={query}
+            onDone={() => setCreating(false)}
+            onCancel={() => setCreating(false)}
+          />
         )}
       </Sheet>
     </>
@@ -393,6 +519,105 @@ function ClientEditForm({
           Скасувати
         </Button>
         <SubmitClient />
+      </div>
+    </form>
+  );
+}
+
+function SubmitCreate() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} full>
+      {pending ? "Зберігаю…" : "Додати"}
+    </Button>
+  );
+}
+
+/**
+ * Нова картка клієнтки.
+ *
+ * Окрема від `ClientEditForm`: там `id` у прихованому полі й «Зберегти», тут
+ * створення й нотатки одразу в формі — картку часто заводять саме заради них
+ * (протипокази, домовленості з телефонної розмови).
+ */
+function ClientCreateForm({
+  initialQuery,
+  onDone,
+  onCancel,
+}: {
+  /** Те, що майстриня вже ввела в пошук: найчастіше саме ім'я або номер. */
+  initialQuery: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [state, action] = useActionState(createClientAction, INITIAL);
+
+  useEffect(() => {
+    if (state.status === "success") onDone();
+  }, [state.status, onDone]);
+
+  // Шукали людину, не знайшли, тиснете «Додати» — введене не має пропасти.
+  // Цифри — це номер, решта — ім'я.
+  const q = initialQuery.trim();
+  const looksLikePhone = q.length > 0 && /^[\d\s+()-]+$/.test(q);
+
+  return (
+    <form action={action} className="space-y-4">
+      <label className="block">
+        <span className="text-[14px] text-ink-muted">Ім’я</span>
+        <input
+          name="name"
+          type="text"
+          required
+          autoFocus
+          defaultValue={looksLikePhone ? "" : q}
+          className={INPUT_CLS}
+        />
+      </label>
+
+      <label className="block">
+        <span className="text-[14px] text-ink-muted">Телефон</span>
+        <input
+          name="phone"
+          type="tel"
+          required
+          inputMode="tel"
+          placeholder="+380 __ ___ __ __"
+          defaultValue={looksLikePhone ? q : ""}
+          className={INPUT_CLS}
+        />
+      </label>
+
+      <label className="block">
+        <span className="text-[14px] text-ink-muted">
+          Email (необов’язково)
+        </span>
+        <input name="email" type="email" className={INPUT_CLS} />
+      </label>
+
+      <label className="block">
+        <span className="text-[14px] text-ink-muted">
+          Нотатки (необов’язково)
+        </span>
+        <textarea
+          name="notes"
+          rows={3}
+          placeholder="Протипокази, особливості шкіри, домовленості"
+          className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
+        />
+      </label>
+
+      {state.status === "error" && (
+        <p role="alert" className="text-[14px] text-[#b3261e]">
+          {state.message}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <Button tone="light" onClick={onCancel} full>
+          Скасувати
+        </Button>
+        <SubmitCreate />
       </div>
     </form>
   );

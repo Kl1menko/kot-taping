@@ -10,7 +10,7 @@ export default async function ClientsPage() {
 
   // Тільки список зі зведеною статистикою. Історія візитів вантажиться
   // окремо, коли відкривають конкретну картку — див. ./history.ts.
-  const clients = await listClientsWithStats();
+  const { clients, hasMore } = await listClientsWithStats();
 
-  return <ClientsScreen clients={clients} />;
+  return <ClientsScreen clients={clients} hasMore={hasMore} />;
 }

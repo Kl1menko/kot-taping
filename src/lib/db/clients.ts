@@ -77,6 +77,42 @@ export async function upsertClient(input: {
   return data;
 }
 
+/**
+ * Нова клієнтка, заведена вручну з адмінки.
+ *
+ * Окремо від `upsertClient`: там повторний номер означає «та сама людина
+ * записується знову» і мовчки повертає наявний рядок. Тут навпаки — майстриня
+ * свідомо заводить нову картку, тож дублікат треба показати, а не сховати.
+ */
+export async function createClient(input: {
+  name: string;
+  phone: string;
+  email?: string | null;
+  notes?: string | null;
+}): Promise<ClientRow> {
+  const { data, error } = await db()
+    .from("clients")
+    .insert({
+      name: input.name.trim(),
+      phone: normalizePhone(input.phone),
+      email: input.email?.trim() || null,
+      notes: input.notes?.trim() || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    // Гонка: між перевіркою в екшені та вставкою номер міг зайняти
+    // паралельний запит (заявка з сайту, другий пристрій).
+    if (error.code === "23505") {
+      throw new Error("Клієнт із таким номером уже існує.");
+    }
+    throw new Error(`Не вдалося створити клієнта: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function getClient(id: string): Promise<ClientRow | null> {
   const { data, error } = await db()
     .from("clients")
@@ -117,19 +153,59 @@ export type ClientWithStats = ClientRow & {
  */
 export async function listClientsWithStats(
   query = "",
-): Promise<ClientWithStats[]> {
-  const clients = await searchClients(query);
-  if (clients.length === 0) return [];
+): Promise<{ clients: ClientWithStats[]; hasMore: boolean }> {
+  const VISITS =
+    "client_id, price, starts_at, status, location:locations ( city )";
+
+  /**
+   * Без пошуку обидва запити йдуть одночасно.
+   *
+   * Візити фільтруються через `in` по id клієнтів, тож виглядають залежними —
+   * але коли пошуку немає, ми беремо всіх клієнтів, отже й усі візити: `in`
+   * нічого не відсіює. Чекати на перший запит заради цього означає віддати
+   * ~180 мс на кожне відкриття сторінки (заміряно на цій базі).
+   *
+   * З пошуком залежність справжня: клієнтів одиниці, і тягнути через `in`
+   * дешевше, ніж усю таблицю візитів.
+   */
+  if (!query.trim()) {
+    const [page, visitsResult] = await Promise.all([
+      searchClients(query),
+      db().from("appointments").select(VISITS),
+    ]);
+
+    if (visitsResult.error) {
+      throw new Error(
+        `Не вдалося прочитати візити: ${visitsResult.error.message}`,
+      );
+    }
+
+    return buildStats(page.rows, page.hasMore, visitsResult.data ?? []);
+  }
+
+  const { rows: clients, hasMore } = await searchClients(query);
+  if (clients.length === 0) return { clients: [], hasMore: false };
 
   const { data: appointments, error } = await db()
     .from("appointments")
-    .select("client_id, price, starts_at, status, location:locations ( city )")
+    .select(VISITS)
     .in(
       "client_id",
       clients.map((c) => c.id),
     );
 
   if (error) throw new Error(`Не вдалося прочитати візити: ${error.message}`);
+
+  return buildStats(clients, hasMore, appointments ?? []);
+}
+
+/** Зведення візитів у статистику — спільне для обох гілок вище. */
+function buildStats(
+  clients: ClientRow[],
+  hasMore: boolean,
+  appointments: unknown[],
+): { clients: ClientWithStats[]; hasMore: boolean } {
+  if (clients.length === 0) return { clients: [], hasMore: false };
 
   // Вкладений джойн збиває виведення типів postgrest до `never`, тож
   // описуємо форму рядка вручну — так само, як у appointments.ts.
@@ -188,21 +264,24 @@ export async function listClientsWithStats(
     stats.set(a.client_id, entry);
   }
 
-  return clients.map((client) => {
-    const entry = stats.get(client.id);
-    return {
-      ...client,
-      visits: entry?.visits ?? 0,
-      totalSpent: entry?.totalSpent ?? 0,
-      lastVisit: entry?.lastVisit ?? null,
-      nextVisit: entry?.nextVisit ?? null,
-      cities: entry
-        ? [...entry.cityCounts]
-            .sort((a, b) => b[1] - a[1])
-            .map(([city]) => city)
-        : [],
-    };
-  });
+  return {
+    clients: clients.map((client) => {
+      const entry = stats.get(client.id);
+      return {
+        ...client,
+        visits: entry?.visits ?? 0,
+        totalSpent: entry?.totalSpent ?? 0,
+        lastVisit: entry?.lastVisit ?? null,
+        nextVisit: entry?.nextVisit ?? null,
+        cities: entry
+          ? [...entry.cityCounts]
+              .sort((a, b) => b[1] - a[1])
+              .map(([city]) => city)
+          : [],
+      };
+    }),
+    hasMore,
+  };
 }
 
 export async function updateClientNotes(id: string, notes: string) {
@@ -236,10 +315,26 @@ export async function updateClient(
 }
 
 /**
+ * Скільки клієнтів сторінка тягне за раз.
+ *
+ * Не «стільки, скільки є»: разом із кожним рядком їдуть телефон і нотатки про
+ * здоров'я, тож віддавати всю базу в HTML на кожен відкритий екран не варто.
+ * Півтисячі — це кілька років роботи студії, і при цьому ще розумний обсяг.
+ */
+export const CLIENTS_PAGE_SIZE = 500;
+
+/**
  * Пошук за іменем або телефоном. Телефонний запит нормалізуємо, щоб «+380 63»
  * знаходило збережене `063…`.
+ *
+ * Ліміт свідомо повертаємо назовні (`hasMore`), а не ковтаємо: раніше зріз на
+ * сотому клієнті був невидимим, і 101-ша клієнтка просто не знаходилась —
+ * пошук на екрані фільтрує вже завантажений масив. Тепер список довший, а якщо
+ * він усе одно впреться в межу, інтерфейс про це скаже вголос.
  */
-export async function searchClients(query: string): Promise<ClientRow[]> {
+export async function searchClients(
+  query: string,
+): Promise<{ rows: ClientRow[]; hasMore: boolean }> {
   const trimmed = query.trim();
 
   let request = db().from("clients").select("*").order("name");
@@ -252,7 +347,13 @@ export async function searchClients(query: string): Promise<ClientRow[]> {
       : request.ilike("name", `%${escaped}%`);
   }
 
-  const { data, error } = await request.limit(100);
+  // Беремо на один рядок більше за сторінку: якщо він приїхав — межу досягнуто.
+  const { data, error } = await request.limit(CLIENTS_PAGE_SIZE + 1);
   if (error) throw new Error(`Не вдалося знайти клієнтів: ${error.message}`);
-  return data ?? [];
+
+  const rows = data ?? [];
+  return {
+    rows: rows.slice(0, CLIENTS_PAGE_SIZE),
+    hasMore: rows.length > CLIENTS_PAGE_SIZE,
+  };
 }
