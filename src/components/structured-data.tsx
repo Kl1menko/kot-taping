@@ -1,4 +1,4 @@
-import { SERVICES } from "@/lib/services";
+import type { Service } from "@/lib/services";
 import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { FAQ_ITEMS } from "@/lib/content";
 import { SITE_URL } from "@/lib/site";
@@ -13,7 +13,7 @@ import { SITE_URL } from "@/lib/site";
  * Геокоординат тут свідомо немає: точних не маємо, а вигадані відправили б
  * людину не за тією адресою.
  */
-export function StructuredData() {
+export function StructuredData({ services }: { services: Service[] }) {
   const business = {
     "@context": "https://schema.org",
     "@type": "HealthAndBeautyBusiness",
@@ -43,7 +43,7 @@ export function StructuredData() {
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Послуги тейпування",
-      itemListElement: SERVICES.map((service) => ({
+      itemListElement: services.map((service) => ({
         "@type": "Offer",
         itemOffered: { "@type": "Service", name: service.title },
         // "від X ₴" is a lower bound, not a fixed price — declare it as such.

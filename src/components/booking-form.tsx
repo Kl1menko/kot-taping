@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitBooking, type BookingState } from "@/app/actions";
-import { CATEGORIES, SERVICES, formatPrice } from "@/lib/services";
+import { CATEGORIES, formatPrice, type Service } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
@@ -70,11 +70,14 @@ function SubmitButton({ full }: { full?: boolean }) {
 }
 
 export function BookingForm({
+  services,
   preselected = "",
   /** Rendered in the modal: lets the sheet close itself from the success state. */
   onDone,
   fullWidthSubmit,
 }: {
+  /** Прайс із бази: у списку лише те, на що справді можна записатись. */
+  services: Service[];
   preselected?: string;
   onDone?: () => void;
   fullWidthSubmit?: boolean;
@@ -185,15 +188,21 @@ export function BookingForm({
           <option value="" disabled>
             Оберіть послугу
           </option>
-          {CATEGORIES.map((cat) => (
-            <optgroup key={cat.id} label={cat.label}>
-              {SERVICES.filter((s) => s.category === cat.id).map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.title} — {formatPrice(s)}
-                </option>
-              ))}
-            </optgroup>
-          ))}
+          {CATEGORIES.map((cat) => {
+            const items = services.filter((s) => s.category === cat.id);
+            // Порожня категорія дала б порожню групу в списку — пропускаємо.
+            if (items.length === 0) return null;
+
+            return (
+              <optgroup key={cat.id} label={cat.label}>
+                {items.map((s) => (
+                  <option key={s.slug} value={s.slug}>
+                    {s.title} — {formatPrice(s)}
+                  </option>
+                ))}
+              </optgroup>
+            );
+          })}
         </select>
       </Field>
 

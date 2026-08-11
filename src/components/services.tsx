@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useBookingModal } from "./booking-modal";
 import {
   CATEGORIES,
-  SERVICES,
   TONE_CLASS,
   formatPrice,
   serviceMeta,
@@ -87,11 +86,25 @@ function ServiceCard({ service }: { service: Service }) {
   );
 }
 
-export function Services() {
-  // Перша категорія зі списку — щоб активна вкладка збігалася з тією, що
+/**
+ * Прайс приходить пропсом із серверного компонента — джерело правди в базі,
+ * тож правки в адмінці видно на сайті. Список категорій звужуємо до тих, у
+ * яких справді є послуги: майстриня може сховати всю категорію, і порожня
+ * вкладка виглядала б як помилка.
+ */
+export function Services({ services }: { services: Service[] }) {
+  const categories = CATEGORIES.filter((cat) =>
+    services.some((s) => s.category === cat.id),
+  );
+
+  // Перша непорожня категорія — щоб активна вкладка збігалася з тією, що
   // стоїть ліворуч, а не була четвертою всередині стрічки.
-  const [active, setActive] = useState<ServiceCategory>(CATEGORIES[0].id);
-  const visible = SERVICES.filter((s) => s.category === active);
+  const [active, setActive] = useState<ServiceCategory | null>(
+    categories[0]?.id ?? null,
+  );
+  const visible = services.filter((s) => s.category === active);
+
+  if (categories.length === 0) return null;
 
   return (
     <Card
@@ -120,7 +133,7 @@ export function Services() {
           aria-label="Категорії послуг"
           className="flex w-max gap-2 md:w-auto md:flex-wrap"
         >
-          {CATEGORIES.map((cat, i) => {
+          {categories.map((cat, i) => {
             const selected = cat.id === active;
             return (
               <button

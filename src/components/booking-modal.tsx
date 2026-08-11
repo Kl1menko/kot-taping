@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { BookingForm } from "./booking-form";
+import type { Service } from "@/lib/services";
 
 type BookingModalContext = {
   /** Opens the sheet, optionally preselecting a service by slug. */
@@ -27,7 +28,14 @@ export function useBookingModal() {
   return ctx;
 }
 
-export function BookingModalProvider({ children }: { children: ReactNode }) {
+export function BookingModalProvider({
+  children,
+  services,
+}: {
+  children: ReactNode;
+  /** Прайс із бази — той самий список, що й у картках послуг. */
+  services: Service[];
+}) {
   const [service, setService] = useState<string | undefined>();
   const [isOpen, setIsOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -140,6 +148,7 @@ export function BookingModalProvider({ children }: { children: ReactNode }) {
 
               <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-8">
                 <BookingForm
+                  services={services}
                   preselected={service}
                   onDone={close}
                   fullWidthSubmit

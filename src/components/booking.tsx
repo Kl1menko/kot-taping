@@ -4,9 +4,10 @@ import { useSearchParams } from "next/navigation";
 import { CONTACTS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 import { BookingForm } from "./booking-form";
+import type { Service } from "@/lib/services";
 import { Card, SectionLabel } from "./ui";
 
-export function Booking() {
+export function Booking({ services }: { services: Service[] }) {
   const preselected = useSearchParams().get("service") ?? "";
 
   return (
@@ -61,7 +62,7 @@ export function Booking() {
         </div>
 
         <div className="px-5 py-16 md:px-14 md:py-20 lg:pr-[var(--gutter-edge-lg)]">
-          <BookingForm preselected={preselected} />
+          <BookingForm services={services} preselected={preselected} />
         </div>
       </div>
     </Card>
