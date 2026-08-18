@@ -18,6 +18,11 @@ const KEY_LEN = 64;
  * Роздільник саме `:`, а не звичний для scrypt/bcrypt `$`: значення живе в
  * .env, а тамтешні парсери (у т.ч. next) розкривають `$foo` як змінну — хеш
  * мовчки обрізався б до `scrypt`.
+ *
+ * Сам застосунок цю функцію не викликає — пароль задається один раз через
+ * `npm run admin:hash`. Лишається тут як пара до `verifyPassword`: формат
+ * визначено в одному місці, а скрипт (він не може імпортувати `server-only`)
+ * повторює саме її.
  */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);

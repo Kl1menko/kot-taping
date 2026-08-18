@@ -36,6 +36,33 @@ export type BookingState = {
       string
     >
   >;
+  /**
+   * Те, що людина вже ввела, — щоб повернути це у форму після помилки.
+   *
+   * React скидає неконтрольовані поля, коли `<form action>` завершується, тож
+   * без цього ехо анкету з вісімнадцяти полів довелося б набирати заново через
+   * одну описку в телефоні. Значення йдуть у `defaultValue`, а `key` форми
+   * змушує React перемонтувати її з новими початковими значеннями.
+   */
+  values?: BookingValues;
+};
+
+/** Сирі значення форми — рівно ті, що прийшли, без нормалізації. */
+export type BookingValues = {
+  name: string;
+  phone: string;
+  service: string;
+  location: string;
+  date: string;
+  note: string;
+  channel: string;
+  handle: string;
+  time: string;
+  tapeColor: string;
+  height: string;
+  measurements: string;
+  contraindications: string[];
+  consent: boolean;
 };
 
 const WINDOW_MS = 60 * 60 * 1000;
@@ -91,6 +118,25 @@ export async function submitBooking(
     .getAll("contraindications")
     .map((v) => String(v))
     .filter(isContraindication);
+
+  // Знімок введеного — повертаємо його з кожною помилкою, щоб форма
+  // відновилася такою, якою людина її залишила.
+  const values: BookingValues = {
+    name,
+    phone,
+    service,
+    location,
+    date,
+    note,
+    channel: channelRaw,
+    handle: handleRaw,
+    time: timeRaw,
+    tapeColor: colorRaw,
+    height: heightRaw,
+    measurements,
+    contraindications,
+    consent,
+  };
 
   const fieldErrors: BookingState["fieldErrors"] = {};
 
@@ -174,6 +220,7 @@ export async function submitBooking(
       status: "error",
       message: "Перевірте виділені поля.",
       fieldErrors,
+      values,
     };
   }
 
@@ -185,6 +232,7 @@ export async function submitBooking(
       message:
         "Ви вже надіслали кілька заявок. Я зв'яжуся з вами найближчим часом — " +
         "якщо питання термінове, напишіть у Telegram чи Instagram.",
+      values,
     };
   }
 
@@ -223,6 +271,7 @@ export async function submitBooking(
       message:
         "Не вдалося надіслати заявку. Напишіть, будь ласка, у Telegram або " +
         "Instagram — я відповім одразу.",
+      values,
     };
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, formatPrice, type Service } from "@/lib/services";
@@ -12,6 +12,7 @@ import {
   CONTRAINDICATIONS,
   PREFERRED_TIMES,
   TAPE_COLORS,
+  isContactChannel,
   needsHandle,
   type ContactChannel,
 } from "@/lib/intake";
@@ -167,9 +168,37 @@ export function BookingForm({
 }) {
   const [state, action] = useActionState(submitBooking, INITIAL);
 
-  // Канал тримаємо в стані лише щоб показати/сховати поле ніка. Решта форми —
-  // некерована: значення живуть у DOM і переживають повернення з помилкою.
-  const [channel, setChannel] = useState<ContactChannel>("telegram");
+  // Те, що людина ввела минулого разу. React скидає неконтрольовані поля, коли
+  // серверний екшен завершується, тож після помилки значення приходять із
+  // відповіді й повертаються у форму через `defaultValue`.
+  const sent = state.values;
+
+  // Форму перемонтовуємо на кожну відповідь: `defaultValue` React читає лише
+  // при монтуванні, тож без зміни ключа поля лишилися б порожніми.
+  const formKey = state.values ? JSON.stringify(state.values) : "initial";
+
+  // Канал тримаємо в стані лише щоб показати/сховати поле ніка.
+  const [channel, setChannel] = useState<ContactChannel>(
+    isContactChannel(sent?.channel ?? "") ? (sent!.channel as ContactChannel) : "telegram",
+  );
+
+  const formRef = useRef<HTMLFormElement>(null);
+
+  /**
+   * Перше помилкове поле — у фокус.
+   *
+   * Анкета довга й у модалці зі своєю прокруткою: без цього після відповіді
+   * людина лишається внизу, біля кнопки, і бачить «перевірте виділені поля», а
+   * самі поля — десь вище за межами екрана. Фокус заразом озвучує помилку
+   * читачам з екрана.
+   */
+  useEffect(() => {
+    if (state.status !== "error") return;
+    const first = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+    if (!first) return;
+    first.scrollIntoView({ block: "center", behavior: "smooth" });
+    first.focus({ preventScroll: true });
+  }, [state]);
 
   if (state.status === "success") {
     return (
@@ -235,13 +264,20 @@ export function BookingForm({
   }
 
   return (
-    <form action={action} noValidate className="space-y-6">
+    <form
+      key={formKey}
+      ref={formRef}
+      action={action}
+      noValidate
+      className="space-y-6"
+    >
       <Field label="Ім'я" error={state.fieldErrors?.name}>
         <input
           name="name"
           type="text"
           required
           autoComplete="name"
+          defaultValue={sent?.name ?? ""}
           aria-invalid={Boolean(state.fieldErrors?.name)}
           className={INPUT_CLS}
         />
@@ -258,7 +294,8 @@ export function BookingForm({
           required
           inputMode="tel"
           autoComplete="tel"
-          placeholder="0XX XXX XX XX або +380…"
+          defaultValue={sent?.phone ?? ""}
+          placeholder="0XX XXX XX XX"
           aria-invalid={Boolean(state.fieldErrors?.phone)}
           className={INPUT_CLS}
         />
@@ -268,7 +305,7 @@ export function BookingForm({
         <select
           name="service"
           required
-          defaultValue={preselected}
+          defaultValue={sent?.service || preselected}
           aria-invalid={Boolean(state.fieldErrors?.service)}
           className={`${INPUT_CLS} cursor-pointer`}
         >
@@ -297,7 +334,7 @@ export function BookingForm({
         <select
           name="location"
           required
-          defaultValue=""
+          defaultValue={sent?.location ?? ""}
           aria-invalid={Boolean(state.fieldErrors?.location)}
           className={`${INPUT_CLS} cursor-pointer`}
         >
@@ -317,6 +354,7 @@ export function BookingForm({
           name="date"
           type="date"
           required
+          defaultValue={sent?.date ?? ""}
           aria-invalid={Boolean(state.fieldErrors?.date)}
           className={`${INPUT_CLS} ${DATE_INPUT_CLS} cursor-pointer`}
         />
@@ -325,7 +363,12 @@ export function BookingForm({
       <Field label="Коли зручно">
         <div className="mt-2 grid grid-cols-3 gap-2">
           {PREFERRED_TIMES.map((t) => (
-            <Choice key={t.id} name="time" value={t.id}>
+            <Choice
+              key={t.id}
+              name="time"
+              value={t.id}
+              defaultChecked={sent?.time === t.id}
+            >
               <span className="leading-tight">
                 {t.label}
                 <span className="mt-0.5 block text-[12px] opacity-70">
@@ -350,7 +393,7 @@ export function BookingForm({
               key={c.id}
               name="channel"
               value={c.id}
-              defaultChecked={c.id === "telegram"}
+              defaultChecked={(sent?.channel || "telegram") === c.id}
               onSelect={(v) => setChannel(v as ContactChannel)}
             >
               {c.label}
@@ -369,6 +412,7 @@ export function BookingForm({
               <input
                 name="handle"
                 type="text"
+                defaultValue={sent?.handle ?? ""}
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
@@ -391,7 +435,11 @@ export function BookingForm({
               нам не доведеться це узгоджувати листуванням."
       >
         <Field label="Колір тейпу">
-          <select name="tape_color" defaultValue="" className={`${INPUT_CLS} cursor-pointer`}>
+          <select
+            name="tape_color"
+            defaultValue={sent?.tapeColor ?? ""}
+            className={`${INPUT_CLS} cursor-pointer`}
+          >
             <option value="">Не обрано</option>
             {TAPE_COLORS.map((c) => (
               <option key={c} value={c}>
@@ -405,6 +453,7 @@ export function BookingForm({
           <input
             name="height"
             type="text"
+            defaultValue={sent?.height ?? ""}
             inputMode="numeric"
             placeholder="168"
             aria-invalid={Boolean(state.fieldErrors?.height)}
@@ -416,6 +465,7 @@ export function BookingForm({
           <textarea
             name="measurements"
             rows={2}
+            defaultValue={sent?.measurements ?? ""}
             className={`${INPUT_CLS} min-h-[72px] resize-y py-3 leading-relaxed`}
           />
         </Field>
@@ -436,6 +486,7 @@ export function BookingForm({
                 type="checkbox"
                 name="contraindications"
                 value={c.id}
+                defaultChecked={sent?.contraindications.includes(c.id) ?? false}
                 className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
               />
               <span className="text-[15px] leading-snug">{c.label}</span>
@@ -448,6 +499,7 @@ export function BookingForm({
         <textarea
           name="note"
           rows={3}
+          defaultValue={sent?.note ?? ""}
           className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
         />
       </Field>
@@ -458,6 +510,7 @@ export function BookingForm({
             type="checkbox"
             name="consent"
             required
+            defaultChecked={sent?.consent ?? false}
             aria-invalid={Boolean(state.fieldErrors?.consent)}
             className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
           />

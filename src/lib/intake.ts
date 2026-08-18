@@ -119,7 +119,7 @@ export const TAPE_COLORS = [
   "На ваш розсуд",
 ] as const;
 
-export type TapeColor = (typeof TAPE_COLORS)[number];
+type TapeColor = (typeof TAPE_COLORS)[number];
 
 export function isTapeColor(v: string): v is TapeColor {
   return (TAPE_COLORS as readonly string[]).includes(v);

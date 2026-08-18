@@ -7,7 +7,7 @@
  * services.ts.
  */
 
-export type FaqItem = { q: string; a: string };
+type FaqItem = { q: string; a: string };
 
 /**
  * Відповіді студії, перенесені з її сторінки на EasyWeek
@@ -50,7 +50,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-export type Testimonial = { quote: string; author: string; detail: string };
+type Testimonial = { quote: string; author: string; detail: string };
 
 /** PLACEHOLDER — замінити на реальні відгуки, отримані з дозволу клієнтів. */
 export const TESTIMONIALS: Testimonial[] = [

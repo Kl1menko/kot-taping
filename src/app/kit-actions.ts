@@ -22,6 +22,23 @@ export type KitOrderState = {
       string
     >
   >;
+  /** Введене — щоб повернути його у форму після помилки. Див. `BookingState`. */
+  values?: KitOrderValues;
+};
+
+/** Сирі значення форми — рівно ті, що прийшли, без нормалізації. */
+export type KitOrderValues = {
+  name: string;
+  phone: string;
+  kit: string;
+  channel: string;
+  handle: string;
+  tapeColor: string;
+  measurements: string;
+  city: string;
+  country: string;
+  note: string;
+  consent: boolean;
 };
 
 const WINDOW_MS = 60 * 60 * 1000;
@@ -63,6 +80,21 @@ export async function submitKitOrder(
   const countryRaw = String(formData.get("country") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   const consent = formData.get("consent") != null;
+
+  // Знімок введеного — повертаємо його з кожною помилкою.
+  const values: KitOrderValues = {
+    name,
+    phone,
+    kit: kitSlug,
+    channel: channelRaw,
+    handle: handleRaw,
+    tapeColor: colorRaw,
+    measurements,
+    city,
+    country: countryRaw,
+    note,
+    consent,
+  };
 
   const fieldErrors: KitOrderState["fieldErrors"] = {};
 
@@ -112,7 +144,12 @@ export async function submitKitOrder(
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { status: "error", message: "Перевірте виділені поля.", fieldErrors };
+    return {
+      status: "error",
+      message: "Перевірте виділені поля.",
+      fieldErrors,
+      values,
+    };
   }
 
   const normalized = normalizePhone(phone);
@@ -123,6 +160,7 @@ export async function submitKitOrder(
       message:
         "Ви вже надіслали кілька замовлень. Я зв'яжуся з вами найближчим часом — " +
         "якщо питання термінове, напишіть у Telegram чи Instagram.",
+      values,
     };
   }
 
@@ -160,6 +198,7 @@ export async function submitKitOrder(
       message:
         "Не вдалося надіслати замовлення. Напишіть, будь ласка, у Telegram або " +
         "Instagram — я відповім одразу.",
+      values,
     };
   }
 

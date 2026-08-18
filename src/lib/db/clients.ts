@@ -113,17 +113,6 @@ export async function createClient(input: {
   return data;
 }
 
-export async function getClient(id: string): Promise<ClientRow | null> {
-  const { data, error } = await db()
-    .from("clients")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) throw new Error(`Не вдалося прочитати клієнта: ${error.message}`);
-  return data ?? null;
-}
-
 export type ClientWithStats = ClientRow & {
   /** Лише виконані візити: заплановані ще нічого не кажуть про клієнта. */
   visits: number;

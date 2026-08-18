@@ -23,10 +23,6 @@ export function Bar({
   );
 }
 
-export function SkeletonHeading() {
-  return <Bar className="h-8 w-48" />;
-}
-
 /** Список карток — календар, заявки, клієнти виглядають однаково. */
 export function SkeletonList({ rows = 4 }: { rows?: number }) {
   return (

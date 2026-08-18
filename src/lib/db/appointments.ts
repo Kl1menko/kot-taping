@@ -68,19 +68,6 @@ export async function listLocations(): Promise<LocationRow[]> {
   return data ?? [];
 }
 
-export async function getAppointment(
-  id: string,
-): Promise<AppointmentWithRefs | null> {
-  const { data, error } = await db()
-    .from("appointments")
-    .select(SELECT_WITH_REFS)
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) throw new Error(`Не вдалося прочитати запис: ${error.message}`);
-  return (data as unknown as AppointmentWithRefs) ?? null;
-}
-
 /** Історія візитів клієнта — для картки клієнта. */
 export async function listClientAppointments(
   clientId: string,

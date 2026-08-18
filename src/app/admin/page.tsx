@@ -82,9 +82,7 @@ export default async function AdminHome() {
         <span className="text-[15px] text-ink-muted">{dayTitle(now)}</span>
       </div>
 
-      {/* Стан дня одним рядком — те, що майстриня хоче знати першим. Раніше
-          тут стояли чотири лічильники, з яких два («Клієнтів», «Активних
-          послуг») не вимагали жодної дії й лише відсували головне вниз. */}
+      {/* Стан дня одним рядком — те, що майстриня хоче знати першим. */}
       <p className="mt-2 text-[17px] leading-snug">
         {todaySummary(
           planned.length,

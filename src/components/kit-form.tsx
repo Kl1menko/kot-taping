@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitKitOrder, type KitOrderState } from "@/app/kit-actions";
 import { SOCIALS } from "@/lib/contacts";
@@ -9,6 +9,7 @@ import { INPUT_CLS } from "@/lib/form";
 import {
   CONTACT_CHANNELS,
   TAPE_COLORS,
+  isContactChannel,
   needsHandle,
   type ContactChannel,
 } from "@/lib/intake";
@@ -87,13 +88,33 @@ export function KitForm({
 }) {
   const [state, action] = useActionState(submitKitOrder, INITIAL);
 
+  // Введене минулого разу: React скидає неконтрольовані поля після серверного
+  // екшена, тож значення повертаються з відповіді. Див. `BookingForm`.
+  const sent = state.values;
+  const formKey = state.values ? JSON.stringify(state.values) : "initial";
+
   // Три речі, від яких залежить, що показувати далі: набір вирішує колір і
   // заміри, канал — поле ніка, країна — попередження про вартість доставки.
-  const [kitSlug, setKitSlug] = useState(preselected ?? kits[0]?.slug ?? "");
-  const [channel, setChannel] = useState<ContactChannel>("telegram");
-  const [country, setCountry] = useState<string>("Україна");
+  const [kitSlug, setKitSlug] = useState(
+    sent?.kit || preselected || kits[0]?.slug || "",
+  );
+  const [channel, setChannel] = useState<ContactChannel>(
+    isContactChannel(sent?.channel ?? "") ? (sent!.channel as ContactChannel) : "telegram",
+  );
+  const [country, setCountry] = useState<string>(sent?.country || "Україна");
 
   const kit = kits.find((k) => k.slug === kitSlug);
+
+  const formRef = useRef<HTMLFormElement>(null);
+
+  /** Перше помилкове поле — у фокус. Та сама причина, що й в анкеті запису. */
+  useEffect(() => {
+    if (state.status !== "error") return;
+    const first = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+    if (!first) return;
+    first.scrollIntoView({ block: "center", behavior: "smooth" });
+    first.focus({ preventScroll: true });
+  }, [state]);
 
   if (state.status === "success") {
     return (
@@ -159,7 +180,7 @@ export function KitForm({
   }
 
   return (
-    <form action={action} noValidate className="space-y-6">
+    <form key={formKey} ref={formRef} action={action} noValidate className="space-y-6">
       <fieldset>
         <legend className="text-[14px] text-ink-muted">Набір</legend>
 
@@ -212,6 +233,7 @@ export function KitForm({
             type="text"
             required
             autoComplete="name"
+            defaultValue={sent?.name ?? ""}
             aria-invalid={Boolean(state.fieldErrors?.name)}
             className={INPUT_CLS}
           />
@@ -224,7 +246,8 @@ export function KitForm({
             required
             inputMode="tel"
             autoComplete="tel"
-            placeholder="0XX XXX XX XX або +380…"
+            defaultValue={sent?.phone ?? ""}
+            placeholder="0XX XXX XX XX"
             aria-invalid={Boolean(state.fieldErrors?.phone)}
             className={INPUT_CLS}
           />
@@ -267,6 +290,7 @@ export function KitForm({
             <input
               name="handle"
               type="text"
+              defaultValue={sent?.handle ?? ""}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -301,6 +325,7 @@ export function KitForm({
                     type="radio"
                     name="tape_color"
                     value={c}
+                    defaultChecked={sent?.tapeColor === c}
                     className="sr-only"
                   />
                   {SWATCH[c] && (
@@ -331,6 +356,7 @@ export function KitForm({
             <textarea
               name="measurements"
               rows={3}
+              defaultValue={sent?.measurements ?? ""}
               placeholder="Наприклад: ширина чола 14, довжина обличчя 19"
               className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
             />
@@ -363,6 +389,7 @@ export function KitForm({
               name="city"
               type="text"
               required
+              defaultValue={sent?.city ?? ""}
               aria-invalid={Boolean(state.fieldErrors?.city)}
               className={INPUT_CLS}
             />
@@ -380,6 +407,7 @@ export function KitForm({
         <textarea
           name="note"
           rows={3}
+          defaultValue={sent?.note ?? ""}
           className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
         />
       </Field>
@@ -390,6 +418,7 @@ export function KitForm({
             type="checkbox"
             name="consent"
             required
+            defaultChecked={sent?.consent ?? false}
             aria-invalid={Boolean(state.fieldErrors?.consent)}
             className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
           />

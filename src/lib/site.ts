@@ -25,8 +25,3 @@ function resolveSiteUrl(): string {
 }
 
 export const SITE_URL = resolveSiteUrl();
-
-/** Абсолютний URL для шляху на кшталт "/#services". */
-export function absoluteUrl(path: string): string {
-  return new URL(path, SITE_URL).toString();
-}

@@ -43,16 +43,6 @@ export async function listRequests(
   }));
 }
 
-export async function countNewRequests(): Promise<number> {
-  const { count, error } = await db()
-    .from("requests")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "new");
-
-  if (error) throw new Error(`Не вдалося порахувати заявки: ${error.message}`);
-  return count ?? 0;
-}
-
 export async function getRequest(id: string): Promise<RequestRow | null> {
   const { data, error } = await db()
     .from("requests")

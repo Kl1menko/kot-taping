@@ -46,8 +46,6 @@ export function matchesStudioTz(): boolean {
     });
 }
 
-export const WEEKDAY_SHORT = ["НД", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
-
 export const MONTHS_GENITIVE = [
   "січня",
   "лютого",
@@ -147,14 +145,6 @@ export function weekDays(date: Date): Date[] {
   const shift = (base.getDay() + 6) % 7; // нд=0 → 6, пн=1 → 0
   const start = addDays(base, -shift);
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-}
-
-/** Стрічка дат навколо обраного дня — як у горизонтальному перемикачі. */
-export function dateStrip(center: Date, before = 3, after = 10): Date[] {
-  const base = startOfDay(center);
-  return Array.from({ length: before + after + 1 }, (_, i) =>
-    addDays(base, i - before),
-  );
 }
 
 /** Усі дні місяця плюс добивка до повних тижнів — сітка 6×7. */

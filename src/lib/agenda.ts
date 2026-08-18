@@ -46,7 +46,7 @@ export function plural(n: number, one: string, few: string, many: string) {
   return many;
 }
 
-export type AgendaInput = {
+type AgendaInput = {
   /** Заявки зі статусом `new` — на них ще не відповіли. */
   newRequests: number;
   /** Замовлення наборів у роботі, за статусами. */

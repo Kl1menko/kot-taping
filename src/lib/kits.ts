@@ -50,7 +50,7 @@ export const DELIVERY_COUNTRIES = [
   "Інша країна",
 ] as const;
 
-export type DeliveryCountry = (typeof DELIVERY_COUNTRIES)[number];
+type DeliveryCountry = (typeof DELIVERY_COUNTRIES)[number];
 
 export function isDeliveryCountry(v: string): v is DeliveryCountry {
   return (DELIVERY_COUNTRIES as readonly string[]).includes(v);
