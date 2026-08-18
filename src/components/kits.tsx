@@ -1,45 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { Card, SectionLabel } from "./ui";
 import { SocialIcon } from "./social-icons";
 import { SOCIALS } from "@/lib/contacts";
 import { KitForm } from "./kit-form";
-import { formatKitPrice, type Kit, type KitZone } from "@/lib/kits";
+import { formatKitPrice, type Kit } from "@/lib/kits";
 import { Sheet } from "./kit-sheet";
 
 /** Фони плиток по колу — та сама палітра, що й у картках послуг. */
 const TILE_TONES = ["bg-blush", "bg-sand", "bg-clay"];
-
-/** Контурний знак зони — щоб плитка не була просто плямою кольору. */
-function ZoneGlyph({ zone }: { zone: KitZone }) {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      className="size-14 text-ink/25"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.4}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {zone === "neck" ? (
-        <>
-          <path d="M18 8c0 6-1 9-5 12M30 8c0 6 1 9 5 12" />
-          <path d="M13 20c4 3 7 4 11 4s7-1 11-4" />
-          <path d="M12 26c4 4 8 6 12 6s8-2 12-6" />
-        </>
-      ) : (
-        <>
-          <path d="M24 6c8 0 13 6 13 15 0 11-6 21-13 21S11 32 11 21C11 12 16 6 24 6Z" />
-          <path d="M17 19h4M27 19h4" />
-          <path d="M20 30c2 1.5 6 1.5 8 0" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 /** Кругла стрілка гортання — та сама форма, що й у решті кнопок сайту. */
 function ScrollButton({
@@ -155,14 +126,19 @@ export function Kits({ kits }: { kits: Kit[] }) {
                   "motion-reduce:transform-none",
                 ].join(" ")}
               >
-                {/* Тональна плитка замість фото: знімків наборів поки немає, а
-                    порожній сірий прямокутник виглядав би як недовантажена
-                    картинка. Колір чергується, щоб сітка не була однотонною. */}
+                {/* Фото зони, розкроєної під набір. Тон під ним лишається
+                    запасним тлом: поки знімок вантажиться, картка не блимає
+                    сірим прямокутником. */}
                 <span
-                  aria-hidden="true"
-                  className={`grid aspect-[16/10] place-items-center rounded-[20px] ${TILE_TONES[i % TILE_TONES.length]}`}
+                  className={`relative block aspect-[16/10] overflow-hidden rounded-[20px] ${TILE_TONES[i % TILE_TONES.length]}`}
                 >
-                  <ZoneGlyph zone={kit.zone} />
+                  <Image
+                    src={`/images/kits/${kit.slug}.jpg`}
+                    alt=""
+                    fill
+                    sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 78vw"
+                    className="object-cover"
+                  />
                 </span>
 
                 <span className="flex flex-1 flex-col px-3 pb-2 pt-5">

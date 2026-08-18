@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { Hero } from "@/components/hero";
 import { Services } from "@/components/services";
 import { Pitch } from "@/components/pitch";
@@ -38,7 +37,7 @@ export default async function Home() {
   return (
     <BookingModalProvider services={services}>
       <StructuredData services={services} />
-      <main className="pb-24 md:pb-0">
+      <main id="main" className="pb-24 md:pb-0">
         <Hero />
         <Reveal>
           <Services services={services} />
@@ -65,9 +64,7 @@ export default async function Home() {
           <Faq />
         </Reveal>
         <Reveal>
-          <Suspense fallback={null}>
-            <Booking services={services} />
-          </Suspense>
+          <Booking />
         </Reveal>
         <SiteFooter />
       </main>

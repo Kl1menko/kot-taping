@@ -40,7 +40,7 @@ export function About() {
             </p>
           </div>
 
-          <dl className="mt-12 grid grid-cols-3 gap-4 border-t border-line pt-8">
+          <dl className="mt-12 grid grid-cols-3 gap-4 border-t border-line pt-8 text-center sm:text-left">
             {FACTS.map((fact) => (
               <div key={fact.label}>
                 <dt className="sr-only">{fact.label}</dt>

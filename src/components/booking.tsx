@@ -1,31 +1,42 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { CONTACTS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
-import { BookingForm } from "./booking-form";
-import type { Service } from "@/lib/services";
-import { Card, SectionLabel } from "./ui";
+import { BookNowButton } from "./book-now-button";
+import { Card, Container, SectionLabel } from "./ui";
 
-export function Booking({ services }: { services: Service[] }) {
-  const preselected = useSearchParams().get("service") ?? "";
-
+/**
+ * Секція запису: обіцянка й кнопка, а не сама анкета.
+ *
+ * Розгорнута форма займала цілий екран і робила кінець сторінки схожим на
+ * бланк. Тепер анкета живе в тому самому модальному вікні, яке відкривають
+ * картки послуг і липка кнопка на телефоні: один шлях до запису замість двох,
+ * а поля показуються тоді, коли людина вже вирішила їх заповнювати.
+ */
+export function Booking() {
   return (
-    <Card as="section" id="booking">
-      <div className="grid lg:grid-cols-[1fr_1.15fr]">
-        <div className="flex flex-col justify-between bg-blush px-5 py-16 md:px-14 md:py-20 lg:pl-[var(--gutter-edge-lg)]">
+    <Card as="section" id="booking" tone="blush">
+      <Container className="py-16 md:py-24">
+        <SectionLabel>Запис</SectionLabel>
+
+        {/* Заклик і контакти поруч: на телефоні стовпчиком, від lg — двома
+            колонками, де ліва веде до дії, а права лишається довідкою. */}
+        <div className="mt-8 grid gap-12 lg:grid-cols-[1.2fr_1fr] lg:items-end lg:gap-16">
           <div>
-            <SectionLabel>Запис</SectionLabel>
-            <h2 className="mt-8 max-w-[18ch] text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]">
+            <h2 className="max-w-[18ch] text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]">
               Залиште заявку — підберемо зручний час
             </h2>
-            <p className="mt-6 max-w-[38ch] text-[16px] leading-relaxed text-ink-muted">
+            <p className="mt-6 max-w-[42ch] text-[16px] leading-relaxed text-ink-muted">
               Це не миттєве бронювання: я переглядаю кожну заявку особисто й
               телефоную, щоб підтвердити дату та відповісти на запитання.
             </p>
+
+            <div className="mt-10">
+              <BookNowButton size="lg">Записатись на сеанс</BookNowButton>
+            </div>
           </div>
 
-          <div className="mt-12">
+          <div className="lg:pb-2">
             <dl className="space-y-3 text-[15px]">
               <div className="flex gap-3">
                 <dt className="text-ink-muted">Пошта</dt>
@@ -60,11 +71,7 @@ export function Booking({ services }: { services: Service[] }) {
             </nav>
           </div>
         </div>
-
-        <div className="px-5 py-16 md:px-14 md:py-20 lg:pr-[var(--gutter-edge-lg)]">
-          <BookingForm services={services} preselected={preselected} />
-        </div>
-      </div>
+      </Container>
     </Card>
   );
 }
