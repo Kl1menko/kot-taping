@@ -6,12 +6,18 @@ import { useBookingModal } from "./booking-modal";
 import { SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 
+/**
+ * «Послуги» ведуть на окрему сторінку, а не на якір: це справжній маршрут із
+ * власною видачею, і посилання з кожної сторінки сайту — те, чим краулер
+ * міряє його вагу. Решта лишаються якорями головної, тому href абсолютний
+ * («/#about»), інакше з внутрішньої сторінки вони б нікуди не вели.
+ */
 const NAV = [
-  { href: "#services", label: "Послуги" },
-  { href: "#about", label: "Про мене" },
-  { href: "#results", label: "Результати" },
-  { href: "#faq", label: "Питання" },
-  { href: "#booking", label: "Запис" },
+  { href: "/poslugy", label: "Послуги" },
+  { href: "/#about", label: "Про мене" },
+  { href: "/#results", label: "Результати" },
+  { href: "/#faq", label: "Питання" },
+  { href: "/#booking", label: "Запис" },
 ];
 
 export function SiteHeader() {

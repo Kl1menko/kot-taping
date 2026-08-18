@@ -48,11 +48,7 @@ export function Gallery() {
         >
           {GALLERY.map((item, i) => (
             <li key={item.src} className={cardCls(i, GALLERY.length)}>
-              <GalleryCard
-                item={item}
-                priority={i < 3}
-                onOpen={() => setActive(i)}
-              />
+              <GalleryCard item={item} onOpen={() => setActive(i)} />
             </li>
           ))}
         </ul>
@@ -136,11 +132,9 @@ function fanStyle(): React.CSSProperties {
 
 function GalleryCard({
   item,
-  priority,
   onOpen,
 }: {
   item: GalleryItem;
-  priority: boolean;
   onOpen: () => void;
 }) {
   // Підпис у віялі не малюємо: сусідні картки перекриваються, і підписи
@@ -170,7 +164,11 @@ function GalleryCard({
           // Збігається з `--fan-card` у fanStyle: браузер має обрати файл під
           // реальний розмір картки, а не під ширину екрана.
           sizes="(min-width: 1600px) 420px, (min-width: 640px) 26vw, 132px"
-          priority={priority}
+          // Без `priority`: галерея — восьма секція сторінки й у перший екран
+          // не потрапляє за жодної висоти вікна. `priority` ставить у розмітку
+          // `<link rel=preload>`, і три фото віяла починали б вантажитись
+          // одночасно з героєм, відбираючи в нього канал. LCP від цього лише
+          // росте, а видно ці картки все одно не раніше.
           className="object-cover transition-transform duration-500 ease-[var(--ease-out-soft)] group-hover:scale-[1.04] motion-reduce:transform-none"
         />
       </div>

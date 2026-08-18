@@ -103,10 +103,13 @@ export function Card({
 }: {
   children: ReactNode;
   className?: string;
-  as?: "div" | "section" | "article";
-  tone?: "surface" | "canvas";
+  as?: "div" | "section" | "article" | "footer";
+  tone?: "surface" | "canvas" | "blush";
 } & ComponentPropsWithoutRef<"section">) {
-  const bg = tone === "canvas" ? "bg-canvas" : "bg-surface";
+  // Фон задається лише тут: `bg-*` через className зіткнувся б із цим класом,
+  // а переможця вирішував би порядок правил у CSS, а не порядок у рядку.
+  const bg =
+    tone === "canvas" ? "bg-canvas" : tone === "blush" ? "bg-blush" : "bg-surface";
   return (
     <Tag {...rest} className={`w-full ${bg} ${className}`}>
       {children}

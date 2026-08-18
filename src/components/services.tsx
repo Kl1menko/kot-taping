@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useBookingModal } from "./booking-modal";
 import {
   CATEGORIES,
@@ -177,6 +178,24 @@ export function Services({ services }: { services: Service[] }) {
           </div>
         ))}
       </div>
+
+      {/* Посилання на сторінку активної категорії.
+
+          Головна — найвагоміша сторінка сайту, і саме звідси краулер має
+          дійти до категорій. Заразом це відповідь людині, якій потрібен опис
+          довший за картку: тут короткий прайс, там — розгорнутий текст. */}
+      {active && (
+        <div className="mt-12">
+          <Link
+            href={`/poslugy/${active}`}
+            className="inline-flex min-h-[52px] items-center gap-3 rounded-full bg-canvas px-7 text-[15px] transition-colors duration-200 hover:bg-ink hover:text-white"
+          >
+            Детальніше про напрям «
+            {categories.find((c) => c.id === active)?.label}»
+            <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      )}
       </Container>
     </Card>
   );
