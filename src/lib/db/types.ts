@@ -5,6 +5,9 @@
  * ручний файл не тягне за собою CLI в тулчейн. Змінюючи міграцію, правте і тут.
  */
 
+import type { ContactChannel, PreferredTime } from "@/lib/intake";
+import type { KitOrderStatus, KitZone } from "@/lib/kits";
+
 export type ServiceRow = {
   id: string;
   slug: string;
@@ -72,6 +75,22 @@ export type RequestRow = {
   status: RequestStatus;
   appointment_id: string | null;
   created_at: string;
+
+  // — Анкета запису, міграція 0005 —
+  /** Куди писати підтвердження. Телефон є завжди, канал каже — куди саме. */
+  contact_channel: ContactChannel;
+  /** Нік без «@»; null для каналу 'phone'. */
+  contact_handle: string | null;
+  /** Орієнтир пацієнта. Точний час ставить майстриня в календарі. */
+  preferred_time: PreferredTime | null;
+  tape_color: string | null;
+  height_cm: number | null;
+  /** Вільний текст: об'єми пишуть як завгодно, читає їх людина. */
+  measurements: string | null;
+  /** Відмічені протипоказання. Не порожньо — заявка потребує узгодження. */
+  contraindications: string[];
+  /** Коли дано згоду на обробку даних; null — згоди не було. */
+  consent_at: string | null;
 };
 
 export type FaqRow = {
@@ -103,6 +122,45 @@ export type ResultRow = {
   created_at: string;
 };
 
+/** Каталог наборів для самотейпування — міграція 0006. */
+export type KitRow = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  price: number;
+  price_from: boolean;
+  zone: KitZone;
+  /** Обличчя тейпується лише білим, тож вибору кольору там немає. */
+  allows_color: boolean;
+  needs_measurements: boolean;
+  sort: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+/** Замовлення набору — міграція 0006. */
+export type KitOrderRow = {
+  id: string;
+  /** Slug, а не FK: замовлення переживає зняття набору з продажу. */
+  kit_slug: string;
+  name: string;
+  phone: string;
+  contact_channel: ContactChannel;
+  contact_handle: string | null;
+  /** Лише для наборів на шию; для обличчя null — тейп білий. */
+  tape_color: string | null;
+  measurements: string | null;
+  city: string;
+  country: string;
+  note: string | null;
+  status: KitOrderStatus;
+  /** Накладна для відстеження — з'являється на відправленні. */
+  tracking: string | null;
+  consent_at: string | null;
+  created_at: string;
+};
+
 /** Лічильник спроб входу — міграція 0004. Рядок один на ключ. */
 export type LoginAttemptRow = {
   key: string;
@@ -123,6 +181,8 @@ export type Database = {
       faq_items: Table<FaqRow>;
       testimonials: Table<TestimonialRow>;
       results: Table<ResultRow>;
+      kits: Table<KitRow>;
+      kit_orders: Table<KitOrderRow>;
       /**
        * Ключ тут `key`, а не `id`, тож шаблон `Table<>` не підходить.
        * Пишемо напряму — до таблиці ми і так ходимо лише через RPC.
@@ -150,6 +210,8 @@ export type Database = {
     Enums: {
       appointment_status: AppointmentStatus;
       request_status: RequestStatus;
+      contact_channel: ContactChannel;
+      kit_order_status: KitOrderStatus;
     };
     CompositeTypes: Record<string, never>;
   };

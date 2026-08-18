@@ -7,6 +7,7 @@ import { Results } from "@/components/results";
 import { Testimonials } from "@/components/testimonials";
 import { Gallery } from "@/components/gallery";
 import { Faq } from "@/components/faq";
+import { Kits } from "@/components/kits";
 import { Booking } from "@/components/booking";
 import { SiteFooter } from "@/components/site-footer";
 import { MobileCta } from "@/components/mobile-cta";
@@ -14,6 +15,7 @@ import { Reveal } from "@/components/reveal";
 import { StructuredData } from "@/components/structured-data";
 import { BookingModalProvider } from "@/components/booking-modal";
 import { listPublicServices } from "@/lib/db/public-services";
+import { listPublicKits } from "@/lib/db/public-kits";
 
 /**
  * Сторінка статична, але з терміном придатності.
@@ -28,7 +30,10 @@ export const revalidate = 3600;
 export default async function Home() {
   // Один запит на сторінку: прайс потрібен і карткам, і формі запису, і
   // schema.org — читаємо його тут і передаємо вниз, щоб не ходити в базу тричі.
-  const services = await listPublicServices();
+  const [services, kits] = await Promise.all([
+    listPublicServices(),
+    listPublicKits(),
+  ]);
 
   return (
     <BookingModalProvider services={services}>
@@ -40,6 +45,9 @@ export default async function Home() {
         </Reveal>
         <Reveal>
           <Pitch />
+        </Reveal>
+        <Reveal>
+          <Kits kits={kits} />
         </Reveal>
         <Reveal>
           <About />

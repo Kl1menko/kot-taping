@@ -1,12 +1,20 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, formatPrice, type Service } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
+import {
+  CONTACT_CHANNELS,
+  CONTRAINDICATIONS,
+  PREFERRED_TIMES,
+  TAPE_COLORS,
+  needsHandle,
+  type ContactChannel,
+} from "@/lib/intake";
 
 const INITIAL: BookingState = { status: "idle" };
 
@@ -37,6 +45,81 @@ function Field({
   );
 }
 
+
+/**
+ * Підзаголовок групи полів. Анкета довга, і суцільний стовпчик із двадцяти
+ * полів читається як медична форма, а не як запис зі сторіз, — розділювачі
+ * тримають її на око короткою.
+ */
+function Group({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="space-y-6 border-t border-line pt-7">
+      <legend className="sr-only">{title}</legend>
+      <div>
+        <p className="text-[15px] text-ink">{title}</p>
+        {hint && (
+          <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
+            {hint}
+          </p>
+        )}
+      </div>
+      {children}
+    </fieldset>
+  );
+}
+
+/**
+ * Радіо-кнопка як плитка: пальцем влучити легше, ніж у нативний кружок.
+ *
+ * Поле навмисно некероване, а виділення малює CSS через `has-[:checked]`.
+ * Керований варіант тут був би пасткою: `checked` без `onChange` React
+ * заморожує, і кнопка перестає перемикатись — саме так і сталося з вибором
+ * часу. Кому потрібне значення в React (канал зв'язку), той слухає `onSelect`,
+ * але вибір усе одно лишається за браузером.
+ */
+function Choice({
+  name,
+  value,
+  defaultChecked,
+  onSelect,
+  children,
+}: {
+  name: string;
+  value: string;
+  defaultChecked?: boolean;
+  /** Необов'язковий: потрібен лише тим, хто показує залежні поля. */
+  onSelect?: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      className={[
+        "flex min-h-[52px] cursor-pointer items-center justify-center rounded-2xl border px-3 text-center text-[15px]",
+        "border-line bg-canvas transition-colors duration-200",
+        "has-[:focus-visible]:border-ink",
+        "has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-white",
+      ].join(" ")}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        defaultChecked={defaultChecked}
+        onChange={() => onSelect?.(value)}
+        className="sr-only"
+      />
+      {children}
+    </label>
+  );
+}
 
 function SubmitButton({ full }: { full?: boolean }) {
   const { pending } = useFormStatus();
@@ -83,6 +166,10 @@ export function BookingForm({
   fullWidthSubmit?: boolean;
 }) {
   const [state, action] = useActionState(submitBooking, INITIAL);
+
+  // Канал тримаємо в стані лише щоб показати/сховати поле ніка. Решта форми —
+  // некерована: значення живуть у DOM і переживають повернення з помилкою.
+  const [channel, setChannel] = useState<ContactChannel>("telegram");
 
   if (state.status === "success") {
     return (
@@ -163,7 +250,7 @@ export function BookingForm({
       <Field
         label="Телефон"
         error={state.fieldErrors?.phone}
-        hint="Зателефоную для підтвердження"
+        hint="Потрібен для підтвердження запису"
       >
         <input
           name="phone"
@@ -171,7 +258,7 @@ export function BookingForm({
           required
           inputMode="tel"
           autoComplete="tel"
-          placeholder="+380 __ ___ __ __"
+          placeholder="0XX XXX XX XX або +380…"
           aria-invalid={Boolean(state.fieldErrors?.phone)}
           className={INPUT_CLS}
         />
@@ -235,6 +322,128 @@ export function BookingForm({
         />
       </Field>
 
+      <Field label="Коли зручно">
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {PREFERRED_TIMES.map((t) => (
+            <Choice key={t.id} name="time" value={t.id}>
+              <span className="leading-tight">
+                {t.label}
+                <span className="mt-0.5 block text-[12px] opacity-70">
+                  {t.range}
+                </span>
+              </span>
+            </Choice>
+          ))}
+        </div>
+        <span className="mt-1.5 block text-[13px] text-ink-muted">
+          Точний час узгодимо — підберу вільне вікно в цьому проміжку.
+        </span>
+      </Field>
+
+      <Group
+        title="Як із вами зв'язатися"
+        hint="Напишу підтвердження з деталями запису."
+      >
+        <div className="grid grid-cols-3 gap-2">
+          {CONTACT_CHANNELS.map((c) => (
+            <Choice
+              key={c.id}
+              name="channel"
+              value={c.id}
+              defaultChecked={c.id === "telegram"}
+              onSelect={(v) => setChannel(v as ContactChannel)}
+            >
+              {c.label}
+            </Choice>
+          ))}
+        </div>
+
+        {CONTACT_CHANNELS.filter((c) => c.id === channel).map((c) =>
+          needsHandle(c.id) ? (
+            <Field
+              key={c.id}
+              label={c.handleLabel!}
+              error={state.fieldErrors?.handle}
+              hint={c.hint}
+            >
+              <input
+                name="handle"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="@nickname"
+                aria-invalid={Boolean(state.fieldErrors?.handle)}
+                className={INPUT_CLS}
+              />
+            </Field>
+          ) : (
+            <p key={c.id} className="text-[13px] text-ink-muted">
+              {c.hint}
+            </p>
+          ),
+        )}
+      </Group>
+
+      <Group
+        title="Деталі процедури"
+        hint="Необов'язково — але якщо заповните, я одразу розрахую матеріал і
+              нам не доведеться це узгоджувати листуванням."
+      >
+        <Field label="Колір тейпу">
+          <select name="tape_color" defaultValue="" className={`${INPUT_CLS} cursor-pointer`}>
+            <option value="">Не обрано</option>
+            {TAPE_COLORS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Зріст, см" error={state.fieldErrors?.height}>
+          <input
+            name="height"
+            type="text"
+            inputMode="numeric"
+            placeholder="168"
+            aria-invalid={Boolean(state.fieldErrors?.height)}
+            className={INPUT_CLS}
+          />
+        </Field>
+
+        <Field label="Об'єми" hint="Наприклад: талія 68, стегна 95.">
+          <textarea
+            name="measurements"
+            rows={2}
+            className={`${INPUT_CLS} min-h-[72px] resize-y py-3 leading-relaxed`}
+          />
+        </Field>
+      </Group>
+
+      <Group
+        title="Протипоказання"
+        hint="Відмітьте, якщо щось із цього вас стосується. Це не відмова — ми
+              просто обговоримо деталі до візиту, а не після нього."
+      >
+        <div className="space-y-1">
+          {CONTRAINDICATIONS.map((c) => (
+            <label
+              key={c.id}
+              className="flex cursor-pointer items-start gap-3 rounded-2xl px-1 py-2.5 transition-colors duration-200 has-[:focus-visible]:bg-canvas"
+            >
+              <input
+                type="checkbox"
+                name="contraindications"
+                value={c.id}
+                className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
+              />
+              <span className="text-[15px] leading-snug">{c.label}</span>
+            </label>
+          ))}
+        </div>
+      </Group>
+
       <Field label="Коментар (необов'язково)">
         <textarea
           name="note"
@@ -242,6 +451,26 @@ export function BookingForm({
           className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
         />
       </Field>
+
+      <div className="border-t border-line pt-6">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            name="consent"
+            required
+            aria-invalid={Boolean(state.fieldErrors?.consent)}
+            className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
+          />
+          <span className="text-[14px] leading-relaxed text-ink-muted">
+            Погоджуюсь на обробку персональних даних для запису на процедуру.
+          </span>
+        </label>
+        {state.fieldErrors?.consent && (
+          <p role="alert" className="mt-2 text-[13px] text-[#b3261e]">
+            {state.fieldErrors.consent}
+          </p>
+        )}
+      </div>
 
       {state.status === "error" && state.message && (
         <p role="alert" className="text-[14px] text-[#b3261e]">
