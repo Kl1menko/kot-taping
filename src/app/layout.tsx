@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
 import { Preloader } from "@/components/preloader";
+import { Analytics } from "@/components/analytics";
 import { SITE_URL } from "@/lib/site";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
 
@@ -15,6 +16,14 @@ const grotesque = Manrope({
   adjustFontFallback: true,
   fallback: ["system-ui", "arial"],
 });
+
+/**
+ * Ідентифікатор лічильника (формат `G-XXXXXXX`).
+ *
+ * NEXT_PUBLIC_, бо тег працює в браузері — це не секрет: він і так видимий
+ * у розмітці будь-якого сайту з аналітикою.
+ */
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
 
 export const metadata: Metadata = {
   // Без цього OG-картинка і canonical лишаються відносними шляхами, а
@@ -117,6 +126,23 @@ export default function RootLayout({
         </a>
         {children}
       </body>
+
+      {/*
+        Google Analytics.
+
+        Офіційний компонент Next замість пари <script> із довідки Google: той
+        сніпет написано для звичайного HTML, у JSX він не збирається, а
+        головне — рахував би лише перший екран. У App Router перехід між
+        сторінками не перезавантажує документ, тож `gtag('config')`, виконаний
+        один раз, більше не спрацював би. Компонент відстежує такі переходи
+        сам і вантажить gtag.js після гідратації, не змагаючись із героєм за
+        канал.
+
+        Порожній `NEXT_PUBLIC_GA_ID` = лічильника немає зовсім: локально й у
+        прев'ю статистика студії не засмічується власними заходами. Адмінку
+        виключає сама обгортка — див. `analytics.tsx`.
+      */}
+      {GA_ID && <Analytics gaId={GA_ID} />}
     </html>
   );
 }
