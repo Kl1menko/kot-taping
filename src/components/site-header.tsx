@@ -11,13 +11,17 @@ import { SocialIcon } from "./social-icons";
  * власною видачею, і посилання з кожної сторінки сайту — те, чим краулер
  * міряє його вагу. Решта лишаються якорями головної, тому href абсолютний
  * («/#about»), інакше з внутрішньої сторінки вони б нікуди не вели.
+ *
+ * «Запис» тут більше немає: за якорем `#booking` лежить не анкета, а заклик із
+ * кнопкою, тож пункт меню вів до другої кнопки замість форми — а з внутрішньої
+ * сторінки ще й викидав на головну. Запис відкривається модалкою, і в меню він
+ * стоїть окремою кнопкою, а не рядком серед якорів.
  */
 const NAV = [
   { href: "/poslugy", label: "Послуги" },
   { href: "/#about", label: "Про мене" },
   { href: "/#results", label: "Результати" },
   { href: "/#faq", label: "Питання" },
-  { href: "/#booking", label: "Запис" },
 ];
 
 export function SiteHeader() {
@@ -88,6 +92,14 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
+
+          <button
+            type="button"
+            onClick={() => openBooking()}
+            className="cursor-pointer text-[15px] text-ink-muted transition-colors duration-200 hover:text-ink"
+          >
+            Запис
+          </button>
         </nav>
       </div>
 

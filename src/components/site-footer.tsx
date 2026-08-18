@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { CATEGORIES } from "@/lib/services";
 import { SocialIcon } from "./social-icons";
+import { FooterBookLink } from "./footer-book-link";
 import { Card, Container } from "./ui";
 
 export function SiteFooter() {
@@ -46,12 +47,7 @@ export function SiteFooter() {
             >
               {CONTACTS.email}
             </a>
-            <Link
-              href="/#booking"
-              className="text-ink-muted underline-offset-4 transition-colors duration-200 hover:text-ink hover:underline"
-            >
-              Записатись
-            </Link>
+            <FooterBookLink />
           </nav>
         </div>
       </div>
