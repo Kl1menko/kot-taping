@@ -29,7 +29,12 @@ export function Button({
 }) {
   const tones = {
     dark: "bg-ink text-white hover:bg-[#2a2a2a]",
-    light: "border border-line text-ink hover:border-ink",
+    // Межа тут своя, а не `border-line`. Світлі кнопки адмінки майже завжди
+    // стоять у модальному вікні, а воно на `bg-canvas` (#ededed) — і #e4e4e4
+    // на такому тлі дає контраст 1.04:1, тобто кнопка читається як текст без
+    // контуру. #d4d4d4 піднімає його приблизно до 1.4:1: обрис видно, але він
+    // лишається тонким і тихим, а не перетягує увагу з чорної кнопки поруч.
+    light: "border border-[#d4d4d4] text-ink hover:border-ink",
     danger: "border border-[#e6c9c6] text-[#b3261e] hover:bg-blush",
   };
   return (

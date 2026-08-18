@@ -80,69 +80,100 @@ export function PaymentPanel({
   // — Рахунок виставлено й чекає оплати —
   if (live) {
     return (
-      <div className="rounded-[18px] bg-canvas p-5">
-        <div className="flex flex-wrap items-start gap-5">
-          {qrSvg && (
-            <div
-              // Тло біле завжди: QR на кольоровому сканується гірше.
-              className="inline-flex shrink-0 rounded-[18px] bg-white p-3 ring-1 ring-inset ring-line"
-              // Розмітка від бібліотеки, не від користувача: рядок будується
-              // з `page_url`, який ми поклали в базу з відповіді банку.
-              dangerouslySetInnerHTML={{ __html: qrSvg }}
-              role="img"
-              aria-label="QR-код для оплати"
+      <div className="@container rounded-[18px] bg-canvas p-5">
+        {/* QR великий і по центру.
+
+            Раніше він стояв ліворуч, а сума з кнопками — праворуч; колонка з
+            `min-w-[200px]` не влазила у вікно (560px мінус відступи), падала
+            під код, і секція розсипалась на різнокаліберні рядки біля лівого
+            краю.
+
+            Зараз код — головний елемент панелі, бо його показують клієнту
+            просто з екрана телефона: чим більший, тим упевненіше сканується
+            з відстані й під кутом. Тому він на всю ширину, а підписи — під
+            ним, а не збоку. */}
+        {qrSvg && (
+          <div
+            // Тло біле завжди: QR на кольоровому сканується гірше. Поле
+            // навколо коду — теж вимога сканера, тому падінг щедрий.
+            // `[&>svg]` перебиває зашиті бібліотекою width/height="220":
+            // код тягнеться на всю ширину контейнера, лишаючись квадратним.
+            className="mx-auto w-full max-w-[320px] rounded-[18px] bg-white p-4 ring-1 ring-inset ring-line [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
+            // Розмітка від бібліотеки, не від користувача: рядок будується
+            // з `page_url`, який ми поклали в базу з відповіді банку.
+            dangerouslySetInnerHTML={{ __html: qrSvg }}
+            role="img"
+            aria-label="QR-код для оплати"
+          />
+        )}
+
+        {/* Сума й статус — під кодом, теж по центру: інакше вони висіли б
+            біля лівого краю під симетричним квадратом. */}
+        <div className="mt-5 text-center">
+          <p className="tnum text-[26px] leading-none">
+            {formatAmount(live.amount)}
+          </p>
+
+          <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-sand px-3 py-1 text-[13px]">
+            <span
+              aria-hidden="true"
+              className="size-1.5 shrink-0 rounded-full bg-[#b07d4e]"
             />
+            {PAYMENT_STATUS_LABEL[live.status as PaymentStatus]}
+          </span>
+
+          {live.expires_at && (
+            <p className="tnum mt-2 text-[13px] text-ink-muted">
+              Дійсний до{" "}
+              {new Date(live.expires_at).toLocaleString("uk-UA", {
+                day: "numeric",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
           )}
-
-          <div className="min-w-[200px] flex-1">
-            <p className="text-[15px]">
-              {formatAmount(live.amount)} —{" "}
-              <span className="text-ink-muted">
-                {PAYMENT_STATUS_LABEL[live.status as PaymentStatus]}
-              </span>
-            </p>
-
-            {live.expires_at && (
-              <p className="mt-1 text-[13px] text-ink-muted">
-                Дійсний до{" "}
-                {new Date(live.expires_at).toLocaleString("uk-UA", {
-                  day: "numeric",
-                  month: "long",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-            )}
-
-            <p className="mt-4 break-all text-[13px]">
-              <a
-                href={live.page_url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="underline underline-offset-4"
-              >
-                Посилання на оплату
-              </a>
-            </p>
-
-            <div className="mt-4">
-              <Button
-                tone="light"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const res = await onRefresh(live.invoice_id);
-                    setError(res.status === "error" ? (res.message ?? null) : null);
-                  })
-                }
-              >
-                {pending ? "Перевіряю…" : "Перевірити оплату"}
-              </Button>
-            </div>
-
-            {error && <p className="mt-3 text-[14px] text-[#b3261e]">{error}</p>}
-          </div>
         </div>
+
+        {/* Дві дії однієї ваги — рядком, на всю ширину.
+
+            Посилання було текстовим і підкресленим, кнопка — пілюлею: різні на
+            вигляд, хоч роблять сусідні речі. Тепер обидві однакові.
+
+            У вузькій панелі — стовпчиком: «Перевірити оплату» в половині
+            такої ширини ламається на два рядки, і сусідні кнопки виходять
+            різної висоти.
+
+            `@container`, а не медіазапит: ширина тут залежить від панелі, у
+            яку вкладено компонент, а не від вікна браузера. Медіазапит на
+            широкому екрані з вузькою панеллю дав би саме той злам, який ми
+            прибираємо. */}
+        <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4 @[340px]:flex-row">
+          <a
+            href={live.page_url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex min-h-[48px] flex-1 cursor-pointer items-center justify-center rounded-full border border-[#d4d4d4] px-4 text-[15px] text-ink transition-colors duration-200 hover:border-ink"
+          >
+            Посилання
+          </a>
+
+          <Button
+            tone="light"
+            disabled={pending}
+            className="flex-1"
+            onClick={() =>
+              startTransition(async () => {
+                const res = await onRefresh(live.invoice_id);
+                setError(res.status === "error" ? (res.message ?? null) : null);
+              })
+            }
+          >
+            {pending ? "Перевіряю…" : "Перевірити оплату"}
+          </Button>
+        </div>
+
+        {error && <p className="mt-3 text-[14px] text-[#b3261e]">{error}</p>}
       </div>
     );
   }
