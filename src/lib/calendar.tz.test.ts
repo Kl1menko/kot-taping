@@ -11,7 +11,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { STUDIO_TZ, matchesStudioTz } from "./calendar.ts";
+import { STUDIO_TZ, matchesStudioTz, resolveTz } from "./calendar.ts";
 
 /** Що показує календар у зоні студії — незалежно від зони процесу. */
 function studioDay(d: Date): string {
@@ -52,4 +52,30 @@ test("взимку зсув інший, і детектор це врахову�
   // Київ узимку UTC+2: 22:30 UTC = 00:30 наступного дня.
   const winter = new Date("2026-01-15T22:30:00.000Z");
   assert.equal(studioDay(winter), "2026-01-16");
+});
+
+/**
+ * Регресія: на Vercel зона приїжджала як `:UTC` — з двокрапкою попереду.
+ *
+ * Через неї `process.env.TZ ??= STUDIO_TZ` не спрацьовував (значення ж не
+ * порожнє), і продакшен рахував добу за UTC. У логах це було видно як
+ * «Часова зона процесу (:UTC) не збігається зі студійною», а на екрані —
+ * вчорашній список записів щовечора після 21:00.
+ */
+test("зона платформи перекривається студійною, у будь-якому написанні", () => {
+  // Саме та форма, яку виставляє Vercel.
+  assert.equal(resolveTz(":UTC"), STUDIO_TZ);
+  assert.equal(resolveTz("UTC"), STUDIO_TZ);
+  assert.equal(resolveTz("Etc/UTC"), STUDIO_TZ);
+  assert.equal(resolveTz(undefined), STUDIO_TZ);
+  assert.equal(resolveTz(""), STUDIO_TZ);
+});
+
+test("свідомо задана чужа зона лишається недоторканою", () => {
+  // Якщо зону задали руками, це вибір власника сервера: мовчки підмінити її
+  // означало б зламати чийсь навмисний сценарій. Попередження про розбіжність
+  // при цьому все одно піде в лог.
+  assert.equal(resolveTz("America/New_York"), "America/New_York");
+  // Двокрапку прибираємо й тут — інакше Node не зрозуміє значення.
+  assert.equal(resolveTz(":America/New_York"), "America/New_York");
 });

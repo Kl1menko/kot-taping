@@ -46,6 +46,27 @@ export function matchesStudioTz(): boolean {
     });
 }
 
+/**
+ * Яку зону виставити процесу, знаючи ту, що вже задана.
+ *
+ * Vercel виставляє зону сам — і у формі `:UTC`, з двокрапкою попереду (давня
+ * умовність glibc: «шукай файл зони за цим шляхом»). Через неї попередній
+ * `process.env.TZ ??= STUDIO_TZ` не спрацьовував: значення не порожнє, тож
+ * студійна зона не підставлялася, і календар мовчки рахував добу за UTC —
+ * саме той баг, від якого захист і писався.
+ *
+ * Тому питання не «чи задано», а «чи це свідомий вибір». UTC у будь-якому
+ * написанні — типове значення платформи, і його перекриваємо. Усе інше
+ * («America/New_York») хтось задав навмисно: поважаємо й лише попереджаємо.
+ */
+export function resolveTz(current: string | undefined): string {
+  const normalized = current?.replace(/^:/, "");
+  const isPlatformDefault =
+    !normalized || normalized === "UTC" || normalized === "Etc/UTC";
+
+  return isPlatformDefault ? STUDIO_TZ : normalized;
+}
+
 export const MONTHS_GENITIVE = [
   "січня",
   "лютого",

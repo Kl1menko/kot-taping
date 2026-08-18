@@ -1,4 +1,4 @@
-import { STUDIO_TZ, matchesStudioTz } from "@/lib/calendar";
+import { STUDIO_TZ, matchesStudioTz, resolveTz } from "@/lib/calendar";
 
 /**
  * Виконується один раз при старті сервера, до першого запиту.
@@ -14,9 +14,9 @@ import { STUDIO_TZ, matchesStudioTz } from "@/lib/calendar";
  * той самий баг мовчки — без падіння й без сліду в логах.
  */
 export function register() {
-  process.env.TZ ??= STUDIO_TZ;
+  process.env.TZ = resolveTz(process.env.TZ);
 
-  // Зона могла бути задана ззовні (Vercel, Docker, локальний .env). Якщо вона
+  // Зона могла бути задана ззовні свідомо (Docker, локальний .env). Якщо вона
   // не збігається зі студійною — попереджаємо, але не падаємо: несправедливо
   // класти сайт через налаштування, яке ламає лише адмінку.
   if (!matchesStudioTz()) {
