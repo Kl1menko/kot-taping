@@ -14,6 +14,7 @@ import {
   setAppointmentStatus,
 } from "@/app/admin/calendar/actions";
 import { Button, Chip, StatusBadge, formatMoney } from "./ui";
+import { AppointmentPayment } from "./appointment-payment";
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -110,6 +111,15 @@ export function AppointmentDetails({
         {appointment.source === "site" && (
           <Row label="Джерело" value="Заявка з сайту" />
         )}
+      </div>
+
+      {/* Оплата — після деталей і до дій: майстриня спершу звіряє, за що
+          виставляє рахунок, і лише тоді його виставляє. */}
+      <div className="mt-4">
+        <AppointmentPayment
+          appointmentId={appointment.id}
+          defaultAmount={appointment.price}
+        />
       </div>
 
       <div className="mt-5 space-y-3">

@@ -7,6 +7,7 @@
 
 import type { ContactChannel, PreferredTime } from "@/lib/intake";
 import type { KitOrderStatus, KitZone } from "@/lib/kits";
+import type { PaymentStatus } from "@/lib/payments";
 
 export type ServiceRow = {
   id: string;
@@ -161,6 +162,31 @@ export type KitOrderRow = {
   created_at: string;
 };
 
+/**
+ * Рахунок на оплату — міграція 0007.
+ *
+ * Заповнене рівно одне з двох посилань: рахунок або за процедуру, або за
+ * набір. Це гарантує `check` у міграції, тож на читанні можна не боятися
+ * рядка, який не веде нікуди.
+ */
+export type PaymentRow = {
+  id: string;
+  appointment_id: string | null;
+  kit_order_id: string | null;
+  invoice_id: string;
+  page_url: string;
+  /** Копійки, як їх розуміє monobank. */
+  amount: number;
+  ccy: number;
+  status: PaymentStatus;
+  failure_reason: string | null;
+  err_code: string | null;
+  expires_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** Лічильник спроб входу — міграція 0004. Рядок один на ключ. */
 export type LoginAttemptRow = {
   key: string;
@@ -183,6 +209,7 @@ export type Database = {
       results: Table<ResultRow>;
       kits: Table<KitRow>;
       kit_orders: Table<KitOrderRow>;
+      payments: Table<PaymentRow>;
       /**
        * Ключ тут `key`, а не `id`, тож шаблон `Table<>` не підходить.
        * Пишемо напряму — до таблиці ми і так ходимо лише через RPC.

@@ -15,6 +15,7 @@ import {
   type KitOrderStatus,
 } from "@/lib/kits";
 import { Sheet } from "./sheet";
+import { KitOrderPayment } from "./kit-order-payment";
 import { Button, Chip, EmptyState } from "./ui";
 import { INPUT_CLS } from "@/lib/form";
 
@@ -129,7 +130,11 @@ export function KitOrdersScreen({
         title="Замовлення"
       >
         {active && (
-          <OrderDetails order={active} onClose={() => setActive(null)} />
+          <OrderDetails
+            order={active}
+            kitPrice={kits.find((k) => k.slug === active.kit_slug)?.price ?? 0}
+            onClose={() => setActive(null)}
+          />
         )}
       </Sheet>
     </>
@@ -193,9 +198,12 @@ function OrderCard({
 
 function OrderDetails({
   order,
+  kitPrice,
   onClose,
 }: {
   order: KitOrderWithKit;
+  /** Ціна набору з каталогу — підставляється у форму рахунку. */
+  kitPrice: number;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -309,6 +317,14 @@ function OrderDetails({
       >
         {contact.label}
       </a>
+
+      {/* Оплата. Скасованим замовленням рахунок не потрібен, а для решти
+          крок «надіслати реквізити» стоїть прямо в маршруті. */}
+      {order.status !== "cancelled" && (
+        <div className="mt-4">
+          <KitOrderPayment orderId={order.id} defaultAmount={kitPrice} />
+        </div>
+      )}
 
       {step?.action && next && (
         <p className="mt-4 rounded-2xl bg-sand px-4 py-3 text-[15px] leading-relaxed">
