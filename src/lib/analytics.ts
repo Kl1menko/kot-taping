@@ -364,3 +364,76 @@ export function revenueByMonth(items: Countable[], year: number): MonthBucket[] 
 
   return buckets;
 }
+
+// — Онлайн-оплати —
+
+/**
+ * Рядок оплати, який уміє порахувати цей модуль.
+ *
+ * Свій мінімальний тип, а не `PaymentRow` з `db/types`: аналітика лишається
+ * чистою й тестованою без бази, і їй не потрібні ні `page_url`, ні коди
+ * помилок банку.
+ */
+export type CountablePayment = {
+  status: string;
+  /** Копійки, як їх розуміє monobank. */
+  amount: number;
+  /** Момент успішної оплати. null, поки рахунок не оплачено. */
+  paid_at: string | null;
+  appointment_id: string | null;
+  kit_order_id: string | null;
+};
+
+export type OnlinePayments = {
+  /** Скільки рахунків успішно оплачено за період. */
+  count: number;
+  /** Сума оплачених, у копійках. */
+  amount: number;
+  /** Середня оплата, у копійках. 0 — коли оплат не було. */
+  average: number;
+};
+
+/**
+ * Онлайн-оплати за період.
+ *
+ * Рахуємо за `paid_at`, а не за `created_at`: рахунок могли виставити 30
+ * числа, а оплатити 1-го — це гроші наступного місяця, і в звіт вони мають
+ * потрапити саме туди, де надійшли.
+ *
+ * Беремо всі успішні оплати — і за візити, і за набори. Це самостійне число,
+ * а не частка виручки: виручка рахується за виконаними візитами, а тут гроші,
+ * що фактично пройшли через еквайринг. Вони не збігаються навмисно —
+ * передоплата за майбутній візит уже оплата, але ще не виручка, а набір
+ * узагалі не є візитом.
+ *
+ * `hold` не рахуємо: `isPaid` вважає оплатою лише `success`, бо на холді гроші
+ * ще заблоковані, а не списані.
+ */
+export function onlinePayments(
+  payments: CountablePayment[],
+  start: Date,
+  end: Date,
+): OnlinePayments {
+  let count = 0;
+  let amount = 0;
+
+  for (const p of payments) {
+    if (p.status !== "success") continue;
+    if (!p.paid_at) continue;
+
+    const at = new Date(p.paid_at);
+    if (at < start || at >= end) continue;
+
+    count += 1;
+    amount += p.amount;
+  }
+
+  return {
+    count,
+    amount,
+    // Округлення до цілої гривні, а не копійки: середня — похідне число від
+    // ділення, і «1 460,82 ₴» вдає точність, якої немає. Жодного рахунку на
+    // таку суму не існувало.
+    average: count ? Math.round(amount / count / 100) * 100 : 0,
+  };
+}

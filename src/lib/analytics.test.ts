@@ -7,10 +7,12 @@ import {
   clientSplit,
   conversion,
   loadByWeekday,
+  onlinePayments,
   revenueByDay,
   revenueByMonth,
   totals,
   type Countable,
+  type CountablePayment,
 } from "./analytics.ts";
 
 function appt(over: Partial<Countable> = {}): Countable {
@@ -300,4 +302,114 @@ test("незароблені візити рахуються в count, але н
 
   assert.equal(months[7].count, 1, "запланований візит — це подія в місяці");
   assert.equal(months[7].revenue, 0, "але ще не гроші");
+});
+
+// — Онлайн-оплати —
+
+function pay(over: Partial<CountablePayment> = {}): CountablePayment {
+  return {
+    status: "success",
+    amount: 80000,
+    paid_at: new Date(2026, 7, 10, 12, 0).toISOString(),
+    appointment_id: "a1",
+    kit_order_id: null,
+    ...over,
+  };
+}
+
+const AUG_START = new Date(2026, 7, 1);
+const AUG_END = new Date(2026, 8, 1);
+
+test("рахує кількість і суму успішних оплат періоду", () => {
+  const stat = onlinePayments(
+    [pay(), pay({ amount: 150000 }), pay({ amount: 70000 })],
+    AUG_START,
+    AUG_END,
+  );
+
+  assert.equal(stat.count, 3);
+  assert.equal(stat.amount, 300000, "80000 + 150000 + 70000");
+  assert.equal(stat.average, 100000);
+});
+
+test("середня округлюється до цілої гривні", () => {
+  // 80000 + 70000 + 70000 = 220000 / 3 = 73333.33 копійки → 73300 (733 ₴)
+  const stat = onlinePayments(
+    [pay(), pay({ amount: 70000 }), pay({ amount: 70000 })],
+    AUG_START,
+    AUG_END,
+  );
+
+  assert.equal(stat.average % 100, 0, "копійок у середній не буває");
+  assert.equal(stat.average, 73300);
+});
+
+test("неоплачені рахунки не рахуються", () => {
+  const stat = onlinePayments(
+    [
+      pay(),
+      pay({ status: "created", paid_at: null }),
+      pay({ status: "failure", paid_at: null }),
+      pay({ status: "expired", paid_at: null }),
+      pay({ status: "reversed" }),
+    ],
+    AUG_START,
+    AUG_END,
+  );
+
+  assert.equal(stat.count, 1, "лише success");
+  assert.equal(stat.amount, 80000);
+});
+
+test("hold не є оплатою — гроші лише заблоковані", () => {
+  const stat = onlinePayments([pay({ status: "hold" })], AUG_START, AUG_END);
+
+  assert.equal(stat.count, 0);
+  assert.equal(stat.amount, 0);
+});
+
+test("період рахується за датою оплати, а не виставлення", () => {
+  const stat = onlinePayments(
+    [
+      // Оплачено в липні — це гроші минулого місяця.
+      pay({ paid_at: new Date(2026, 6, 31, 23, 0).toISOString() }),
+      // Оплачено 1 серпня — уже наш період.
+      pay({ paid_at: new Date(2026, 7, 1, 0, 30).toISOString() }),
+      // Вересень — за межею.
+      pay({ paid_at: new Date(2026, 8, 1, 0, 30).toISOString() }),
+    ],
+    AUG_START,
+    AUG_END,
+  );
+
+  assert.equal(stat.count, 1, "лише серпнева оплата");
+});
+
+test("оплати за набори рахуються нарівні з візитами", () => {
+  const stat = onlinePayments(
+    [
+      pay({ appointment_id: "a1", kit_order_id: null }),
+      pay({ appointment_id: null, kit_order_id: "k1", amount: 50000 }),
+    ],
+    AUG_START,
+    AUG_END,
+  );
+
+  assert.equal(stat.count, 2, "еквайринг не розрізняє, за що заплатили");
+  assert.equal(stat.amount, 130000);
+});
+
+test("success без paid_at не ламає підрахунок", () => {
+  const stat = onlinePayments([pay({ paid_at: null })], AUG_START, AUG_END);
+
+  assert.equal(stat.count, 0, "без дати оплати період визначити не можна");
+  assert.equal(stat.average, 0);
+});
+
+test("порожній період дає нулі, а не ділення на нуль", () => {
+  const stat = onlinePayments([], AUG_START, AUG_END);
+
+  assert.equal(stat.count, 0);
+  assert.equal(stat.amount, 0);
+  assert.equal(stat.average, 0);
 });

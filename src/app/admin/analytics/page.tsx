@@ -9,10 +9,12 @@ import {
   clientSplit,
   conversion,
   loadByWeekday,
+  onlinePayments,
   revenueByDay,
   revenueByMonth,
   totals,
   type Countable,
+  type CountablePayment,
 } from "@/lib/analytics";
 import { dayTitle, monthTitle, weekRange } from "@/lib/calendar";
 import {
@@ -154,6 +156,7 @@ export default async function AnalyticsPage({
     services,
     firstVisits,
     requests,
+    paymentsRows,
   ] = await Promise.all([
     listLocations(),
     // Один запит на період замість двох. Раніше той самий діапазон читався
@@ -185,6 +188,19 @@ export default async function AnalyticsPage({
       .select("status, created_at")
       .gte("created_at", start.toISOString())
       .lt("created_at", end.toISOString()),
+    /**
+     * Успішні оплати періоду — за датою оплати, не виставлення.
+     *
+     * Фільтр по `paid_at` у самому запиті, а не в пам'яті: рахунків з часом
+     * стає більше за записи (на один візит їх буває кілька), і тягти всю
+     * таблицю заради одного місяця не варто.
+     */
+    db()
+      .from("payments")
+      .select("status, amount, paid_at, appointment_id, kit_order_id")
+      .eq("status", "success")
+      .gte("paid_at", start.toISOString())
+      .lt("paid_at", end.toISOString()),
   ]);
 
   const failure =
@@ -194,7 +210,8 @@ export default async function AnalyticsPage({
     yearWide.error ??
     services.error ??
     firstVisits.error ??
-    requests.error;
+    requests.error ??
+    paymentsRows.error;
   if (failure) {
     throw new Error(`Не вдалося прочитати дані: ${failure.message}`);
   }
@@ -271,6 +288,21 @@ export default async function AnalyticsPage({
     ),
     clients: clientSplit(items, firstVisitByClient, start, end),
     conversion: conversion(requests.data ?? []),
+    /**
+     * Онлайн-оплати — без фільтра кабінету, навмисно.
+     *
+     * У рахунку немає `location_id`: він прив'язаний до запису або до
+     * замовлення набору, а набір кабінету не належить узагалі. Зв'язати
+     * оплату з містом можна було б через `appointment_id`, але тоді оплати
+     * за набори доводилось би або ховати, або приписувати чужому місту.
+     *
+     * Тому секція завжди показує всю студію — і каже про це підписом.
+     */
+    payments: onlinePayments(
+      (paymentsRows.data ?? []) as CountablePayment[],
+      start,
+      end,
+    ),
     load: loadByWeekday(items, start, end),
     hours: byHour(items),
     workDays,

@@ -7,6 +7,7 @@ import type {
   DayBucket,
   LocationStat,
   MonthBucket,
+  OnlinePayments,
   ServiceStat,
   Totals,
   WeekdayLoad,
@@ -16,6 +17,7 @@ import {
   WORK_END_HOUR,
   WORK_START_HOUR,
 } from "@/lib/calendar";
+import { formatAmount } from "@/lib/payments";
 import { Panel, formatMoney } from "./ui";
 
 export type Period = "week" | "month" | "year";
@@ -58,6 +60,8 @@ export type AnalyticsData = {
   services: ServiceStat[];
   clients: ClientSplit;
   conversion: Conversion;
+  /** Успішні оплати через еквайринг. Суми — в копійках. */
+  payments: OnlinePayments;
   load: WeekdayLoad[];
   hours: { hour: number; count: number }[];
   workDays: number;
@@ -344,6 +348,30 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
           <Stat label="в очікуванні" value={String(data.conversion.pending)} />
           <Stat label="конверсія" value={`${data.conversion.rate}%`} />
         </div>
+      </Section>
+
+      {/* Онлайн-оплати.
+
+          Окремо від виручки, бо це різні числа: виручка — виконані візити за
+          прайсом, тут — гроші, що фактично пройшли через еквайринг. Вони
+          розходяться навмисно: передоплата за майбутній візит уже оплата, але
+          ще не виручка, а набір узагалі не візит. */}
+      <Section title="Онлайн-оплати">
+        <div className="grid grid-cols-2 gap-3 px-5 py-5 sm:grid-cols-3">
+          <Stat label="оплат" value={String(data.payments.count)} />
+          <Stat label="сума" value={formatAmount(data.payments.amount)} />
+          <Stat
+            label="середня"
+            value={
+              data.payments.count ? formatAmount(data.payments.average) : "—"
+            }
+          />
+        </div>
+        <p className="px-5 pb-5 text-[13px] leading-relaxed text-ink-muted">
+          Успішні оплати через monobank за датою зарахування — і за візити, і за
+          набори. Показані по всій студії, незалежно від обраного кабінету:
+          рахунок за набір не належить жодному з них.
+        </p>
       </Section>
 
       <Section title="Завантаженість по днях тижня">
