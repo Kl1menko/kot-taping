@@ -3,8 +3,17 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 /**
- * Нижній лист. Використовує нативний `<dialog>`: він дає модальність, фокус-пастку
- * й Esc без власного коду — і працює, навіть якщо гідратація запізнилась.
+ * Модальне вікно розділів адмінки — на телефоні на весь екран, на десктопі
+ * картка посередині.
+ *
+ * Нативний `<dialog>`: він дає модальність, фокус-пастку й Esc без власного
+ * коду — і працює, навіть якщо гідратація запізнилась.
+ *
+ * Раніше це був нижній лист на 86% висоти. На телефоні він програвав саме там,
+ * де потрібен найбільше: у заявці з протипоказаннями та розкроєм видимим
+ * лишався хвіст попереднього блока, шапка з'їдала рядок, а смуга сторінки за
+ * листом плутала з його власною прокруткою. Повний екран знімає це — контент
+ * отримує всю висоту, а кнопки дій стоять на своєму місці внизу.
  */
 export function Sheet({
   open,
@@ -47,22 +56,23 @@ export function Sheet({
       }}
       aria-label={title}
       className={[
-        "m-0 mt-auto w-full max-w-[560px] rounded-t-[28px] bg-canvas p-0 sm:mx-auto sm:mb-auto sm:mt-[6vh] sm:rounded-[28px]",
+        // Телефон: вікно на весь екран, без кутів і зазорів. Десктоп (sm+):
+        // картка посередині з обмеженою висотою.
+        "m-0 h-dvh max-h-none w-full max-w-none bg-canvas p-0",
+        "sm:mx-auto sm:my-[6vh] sm:h-auto sm:max-h-[88dvh] sm:max-w-[560px] sm:rounded-[28px]",
         "backdrop:bg-black/40 open:animate-[sheet-in_240ms_var(--ease-out-soft)]",
       ].join(" ")}
     >
-      <div className="max-h-[86dvh] overflow-y-auto overscroll-contain">
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 bg-canvas px-5 pb-2 pt-4">
-          <span
-            aria-hidden="true"
-            className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-line sm:hidden"
-          />
-          <h2 className="mt-2 text-[15px] text-ink-muted sm:mt-0">{title}</h2>
+      {/* Колонка на всю висоту: шапка й підвал не їдуть, прокручується лише
+          вміст між ними. */}
+      <div className="flex h-full flex-col sm:max-h-[88dvh]">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-canvas px-5 pb-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4">
+          <h2 className="text-[15px] text-ink-muted">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Закрити"
-            className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-surface text-ink transition-colors duration-200 hover:bg-sand"
+            className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full bg-surface text-ink transition-colors duration-200 hover:bg-sand"
           >
             <svg
               viewBox="0 0 24 24"
@@ -78,7 +88,9 @@ export function Sheet({
           </button>
         </div>
 
-        <div className="px-5 pb-8">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5">
+          {children}
+        </div>
       </div>
     </dialog>
   );

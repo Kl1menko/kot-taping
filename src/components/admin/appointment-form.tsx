@@ -49,6 +49,7 @@ export function AppointmentForm({
   services,
   locations,
   appointment,
+  repeatOf,
   defaultStart,
   onDone,
 }: {
@@ -56,32 +57,46 @@ export function AppointmentForm({
   locations: LocationRow[];
   /** Присутній — режим редагування. */
   appointment?: AppointmentWithRefs;
+  /**
+   * Повтор: створюємо новий запис, але поля заповнюємо з попереднього.
+   *
+   * Курс — це 3–7 візитів того самого клієнта на ту саму послугу, і без цього
+   * майстриня щоразу вбивала ім'я, телефон, послугу, ціну й тривалість заново.
+   * Від `appointment` відрізняється тим, що `id` не передається: у базу піде
+   * вставка, а не оновлення.
+   */
+  repeatOf?: AppointmentWithRefs;
   defaultStart?: Date;
   onDone: () => void;
 }) {
   const [state, action] = useActionState(saveAppointment, INITIAL);
 
+  // Звідки брати значення полів: редагований запис, попередній (повтор) або
+  // порожньо. Далі формі байдуже, який саме це випадок, — крім `id`, який
+  // ставиться лише в редагуванні.
+  const source = appointment ?? repeatOf;
+
   // Ціна й тривалість підставляються з прайсу, але лишаються редагованими:
   // реальний сеанс часто відрізняється від типового.
   const [serviceId, setServiceId] = useState(
-    appointment?.service_id ?? services[0]?.id ?? "",
+    source?.service_id ?? services[0]?.id ?? "",
   );
   const selected = services.find((s) => s.id === serviceId);
 
   const [price, setPrice] = useState(
-    String(appointment?.price ?? services[0]?.price ?? 0),
+    String(source?.price ?? services[0]?.price ?? 0),
   );
   const [duration, setDuration] = useState(
-    String(appointment?.duration_min ?? services[0]?.duration_min ?? 60),
+    String(source?.duration_min ?? services[0]?.duration_min ?? 60),
   );
 
   const pickService = (id: string) => {
     setServiceId(id);
     const svc = services.find((s) => s.id === id);
     if (!svc) return;
-    // Підставляємо лише при створенні — у редагуванні майстер уже могла
-    // домовитись про іншу ціну, і затирати її було б грубо.
-    if (!appointment) {
+    // Підставляємо лише при створенні з нуля. І в редагуванні, і в повторі
+    // майстриня вже могла домовитись про іншу ціну — затирати її було б грубо.
+    if (!source) {
       setPrice(String(svc.price));
       setDuration(String(svc.duration_min));
     }
@@ -93,6 +108,8 @@ export function AppointmentForm({
     if (state.status === "success") onDone();
   }, [state.status, onDone]);
 
+  // Час — єдине, що в повторі НЕ переноситься: сенс наступного запису саме в
+  // тому, щоб призначити інший день.
   const start =
     appointment?.starts_at != null
       ? new Date(appointment.starts_at)
@@ -107,7 +124,7 @@ export function AppointmentForm({
           name="name"
           type="text"
           required
-          defaultValue={appointment?.client.name ?? ""}
+          defaultValue={source?.client.name ?? ""}
           autoComplete="off"
           className={INPUT_CLS}
         />
@@ -119,8 +136,8 @@ export function AppointmentForm({
           type="tel"
           required
           inputMode="tel"
-          placeholder="+380 __ ___ __ __"
-          defaultValue={appointment?.client.phone ?? ""}
+          placeholder="0XX XXX XX XX або +380…"
+          defaultValue={source?.client.phone ?? ""}
           className={INPUT_CLS}
         />
       </Field>
@@ -147,7 +164,7 @@ export function AppointmentForm({
           <select
             name="locationId"
             required
-            defaultValue={appointment?.location_id ?? locations[0]?.id ?? ""}
+            defaultValue={source?.location_id ?? locations[0]?.id ?? ""}
             className={`${INPUT_CLS} cursor-pointer`}
           >
             {locations.map((l) => (
@@ -161,7 +178,7 @@ export function AppointmentForm({
         <input
           type="hidden"
           name="locationId"
-          value={appointment?.location_id ?? locations[0]?.id ?? ""}
+          value={source?.location_id ?? locations[0]?.id ?? ""}
         />
       )}
 

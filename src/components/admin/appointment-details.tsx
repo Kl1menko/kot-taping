@@ -35,10 +35,13 @@ const NEXT_STATUS: { id: AppointmentStatus; label: string }[] = [
 export function AppointmentDetails({
   appointment,
   onEdit,
+  onRepeat,
   onClose,
 }: {
   appointment: AppointmentWithRefs;
   onEdit: (a: AppointmentWithRefs) => void;
+  /** Створити наступний запис цьому ж клієнту, не вводячи дані заново. */
+  onRepeat: (a: AppointmentWithRefs) => void;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -144,6 +147,13 @@ export function AppointmentDetails({
             ))}
           </div>
         )}
+
+        {/* Курс — це 3–7 візитів того самого клієнта, тож наступний запис
+            створюється частіше, ніж редагується поточний. Звідси окремий
+            рядок і повна ширина, а не третя кнопка в ряду з видаленням. */}
+        <Button onClick={() => onRepeat(appointment)} full>
+          Наступний запис
+        </Button>
 
         <div className="grid grid-cols-2 gap-2">
           <Button tone="light" onClick={() => onEdit(appointment)} full>

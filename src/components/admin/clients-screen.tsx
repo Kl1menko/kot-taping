@@ -582,7 +582,7 @@ function ClientCreateForm({
           type="tel"
           required
           inputMode="tel"
-          placeholder="+380 __ ___ __ __"
+          placeholder="0XX XXX XX XX або +380…"
           defaultValue={looksLikePhone ? q : ""}
           className={INPUT_CLS}
         />

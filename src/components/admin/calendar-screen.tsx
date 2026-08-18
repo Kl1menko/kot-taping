@@ -17,6 +17,7 @@ import {
   isToday,
   monthGrid,
   monthTitle,
+  nextVisitStart,
 } from "@/lib/calendar";
 import type { AppointmentWithRefs } from "@/lib/db/appointments";
 import type { LocationRow, ServiceRow } from "@/lib/db/types";
@@ -32,7 +33,13 @@ import { Button, EmptyState, formatMoney } from "./ui";
 type SheetState =
   | { kind: "closed" }
   | { kind: "details"; appointment: AppointmentWithRefs }
-  | { kind: "form"; appointment?: AppointmentWithRefs; start?: Date };
+  | {
+      kind: "form";
+      appointment?: AppointmentWithRefs;
+      /** Заготовка з попереднього запису — режим «наступний запис». */
+      repeatOf?: AppointmentWithRefs;
+      start?: Date;
+    };
 
 export function CalendarScreen({
   appointments,
@@ -313,13 +320,24 @@ export function CalendarScreen({
             ? "Запис"
             : sheet.kind === "form" && sheet.appointment
               ? "Редагування запису"
-              : "Новий запис"
+              : sheet.kind === "form" && sheet.repeatOf
+                ? "Наступний запис"
+                : "Новий запис"
         }
       >
         {sheet.kind === "details" && (
           <AppointmentDetails
             appointment={sheet.appointment}
             onEdit={(a) => setSheet({ kind: "form", appointment: a })}
+            onRepeat={(a) =>
+              // Наступний візит курсу зазвичай за тиждень — з нього й
+              // починаємо, майстриня поправить дату на місці.
+              setSheet({
+                kind: "form",
+                repeatOf: a,
+                start: nextVisitStart(new Date(a.starts_at)),
+              })
+            }
             onClose={closeSheet}
           />
         )}
@@ -328,6 +346,7 @@ export function CalendarScreen({
             services={services}
             locations={locations}
             appointment={sheet.appointment}
+            repeatOf={sheet.repeatOf}
             defaultStart={sheet.start}
             onDone={closeSheet}
           />

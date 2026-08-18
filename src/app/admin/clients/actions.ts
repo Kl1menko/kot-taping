@@ -54,7 +54,7 @@ export async function saveClient(
     return { status: "error", message: "Вкажіть ім'я — щонайменше 2 символи." };
   }
   if (!isValidPhone(phone)) {
-    return { status: "error", message: "Номер у форматі +380 XX XXX XX XX." };
+    return { status: "error", message: "Номер телефону — 0XX XXX XX XX або +380 XX XXX XX XX." };
   }
 
   try {
@@ -97,7 +97,7 @@ export async function createClientAction(
     return { status: "error", message: "Вкажіть ім'я — щонайменше 2 символи." };
   }
   if (!isValidPhone(phone)) {
-    return { status: "error", message: "Номер у форматі +380 XX XXX XX XX." };
+    return { status: "error", message: "Номер телефону — 0XX XXX XX XX або +380 XX XXX XX XX." };
   }
 
   // Перевіряємо до вставки, щоб дати зрозуміле повідомлення замість

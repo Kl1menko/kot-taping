@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/admin", label: "Сьогодні" },
   { href: "/admin/requests", label: "Заявки" },
   { href: "/admin/calendar", label: "Календар" },
+  { href: "/admin/kits", label: "Набори" },
   { href: "/admin/clients", label: "Клієнти" },
   { href: "/admin/services", label: "Прайс" },
   { href: "/admin/analytics", label: "Аналітика" },

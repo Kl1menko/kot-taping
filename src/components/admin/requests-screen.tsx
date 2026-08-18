@@ -15,6 +15,11 @@ import type { RequestStatus, ServiceRow } from "@/lib/db/types";
 import { Sheet } from "./sheet";
 import { Button, Chip, EmptyState, formatMoney } from "./ui";
 import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
+import {
+  contraindicationLabels,
+  needsReview,
+  preferredTimeLabel,
+} from "@/lib/intake";
 
 const FILTERS: { id: RequestStatus | "all"; label: string }[] = [
   { id: "new", label: "Нові" },
@@ -26,6 +31,46 @@ const FILTERS: { id: RequestStatus | "all"; label: string }[] = [
 /** Назва міста за slug — заявка зберігає slug, а не назву. */
 function cityFor(slug: string): string {
   return LOCATIONS.find((l) => l.slug === slug)?.city ?? slug;
+}
+
+/**
+ * Куди писати пацієнту. Крок 2 маршруту — «знайти за ніком або номером», тож
+ * посилання має відкривати діалог одразу, а не змушувати копіювати нік.
+ */
+function contactLink(request: RequestWithService): {
+  label: string;
+  href: string;
+} {
+  const handle = request.contact_handle;
+
+  if (request.contact_channel === "instagram" && handle) {
+    return {
+      label: `Instagram @${handle}`,
+      href: `https://instagram.com/${handle}`,
+    };
+  }
+  if (request.contact_channel === "telegram" && handle) {
+    return { label: `Telegram @${handle}`, href: `https://t.me/${handle}` };
+  }
+  // Канал 'phone' — і будь-який месенджер без ніка: номер є завжди.
+  return { label: "Подзвонити", href: `tel:${request.phone}` };
+}
+
+function WarningIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+    </svg>
+  );
 }
 
 const STATUS_LABEL: Record<RequestStatus, string> = {
@@ -132,6 +177,7 @@ function RequestCard({
 }) {
   const created = new Date(request.created_at);
   const isNew = request.status === "new";
+  const flagged = needsReview(request.contraindications);
 
   return (
     <button
@@ -174,6 +220,12 @@ function RequestCard({
               бажано {dayTitle(new Date(request.preferred_date))}
             </Chip>
           )}
+          {flagged && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fdecea] px-3 py-1 text-[13px] text-[#b3261e]">
+              <WarningIcon />
+              потребує узгодження
+            </span>
+          )}
           {!isNew && (
             <span className="text-[13px] text-ink-muted">
               {STATUS_LABEL[request.status]}
@@ -215,6 +267,11 @@ function RequestDetails({
   }, [state.status, onClose]);
 
   const service = services.find((s) => s.slug === request.service_slug);
+  const flags = contraindicationLabels(request.contraindications);
+  const contact = contactLink(request);
+  const timeLabel = request.preferred_time
+    ? preferredTimeLabel(request.preferred_time)
+    : null;
 
   // Бажана дата клієнтки — заготовка; час майстер обирає сама.
   const suggested = request.preferred_date
@@ -237,6 +294,22 @@ function RequestDetails({
 
   return (
     <div>
+      {flags.length > 0 && (
+        <div className="mb-4 rounded-[var(--radius-tile)] bg-[#fdecea] p-5">
+          <p className="flex items-center gap-2 text-[15px] text-[#b3261e]">
+            <WarningIcon />
+            Потребує узгодження до процедури
+          </p>
+          <ul className="mt-3 space-y-1.5">
+            {flags.map((label) => (
+              <li key={label} className="text-[15px] leading-snug text-ink">
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="rounded-[var(--radius-tile)] bg-surface p-5">
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-[24px] leading-tight">{request.name}</h3>
@@ -256,6 +329,16 @@ function RequestDetails({
             </dt>
             <dd className="mt-1 text-[17px]">{formatPhone(request.phone)}</dd>
           </div>
+          {request.contact_handle && (
+            <div>
+              <dt className="text-[12px] uppercase tracking-[0.12em] text-ink-muted">
+                {request.contact_channel === "instagram"
+                  ? "Instagram"
+                  : "Telegram"}
+              </dt>
+              <dd className="mt-1 text-[17px]">@{request.contact_handle}</dd>
+            </div>
+          )}
           {request.preferred_date && (
             <div>
               <dt className="text-[12px] uppercase tracking-[0.12em] text-ink-muted">
@@ -263,6 +346,23 @@ function RequestDetails({
               </dt>
               <dd className="mt-1 text-[17px]">
                 {dayTitle(new Date(request.preferred_date))}
+                {timeLabel && (
+                  <span className="text-ink-muted">, {timeLabel}</span>
+                )}
+              </dd>
+            </div>
+          )}
+          {(request.tape_color || request.height_cm || request.measurements) && (
+            <div>
+              <dt className="text-[12px] uppercase tracking-[0.12em] text-ink-muted">
+                Для розрахунку матеріалу
+              </dt>
+              <dd className="mt-1 space-y-0.5 text-[16px] leading-relaxed">
+                {request.tape_color && <p>Колір: {request.tape_color}</p>}
+                {request.height_cm && <p>Зріст: {request.height_cm} см</p>}
+                {/* Підпис обов'язковий: без нього вільний текст клієнта читався
+                    як продовження попереднього рядка, а не як окреме поле. */}
+                {request.measurements && <p>Об&apos;єми: {request.measurements}</p>}
               </dd>
             </div>
           )}
@@ -279,11 +379,15 @@ function RequestDetails({
         </dl>
       </div>
 
+      {/* Крок 2 маршруту: відкриваємо потрібний діалог, а не змушуємо шукати. */}
       <a
-        href={`tel:${request.phone}`}
+        href={contact.href}
+        {...(contact.href.startsWith("http")
+          ? { target: "_blank", rel: "noreferrer noopener" }
+          : {})}
         className="mt-4 inline-flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-3 rounded-full bg-ink px-6 text-[15px] text-white transition-colors duration-200 hover:bg-[#2a2a2a]"
       >
-        Подзвонити
+        {contact.label}
       </a>
 
       {request.status === "converted" ? (

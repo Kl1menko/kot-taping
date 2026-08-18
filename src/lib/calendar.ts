@@ -118,6 +118,21 @@ export function addDays(d: Date, days: number): Date {
   return copy;
 }
 
+/**
+ * Час наступного візиту курсу — та сама година рівно через тиждень.
+ *
+ * Курс тейпування — це 3–7 візитів із тижневим кроком, і в переважній
+ * більшості випадків наступний припадає на той самий день тижня й ту саму
+ * годину. Це заготовка, а не правило: майстриня поправляє дату у формі.
+ *
+ * `addDays` тут не випадковий: він рахує через `setDate`, тож перехід на
+ * літній час зберігає саме годину («о 14:00»), а не рівно 168 астрономічних
+ * годин, які зсунули б візит на 13:00 чи 15:00.
+ */
+export function nextVisitStart(previous: Date, weeks = 1): Date {
+  return addDays(previous, 7 * weeks);
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return dateKey(a) === dateKey(b);
 }

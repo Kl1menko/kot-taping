@@ -7,6 +7,7 @@ import {
   layoutDay,
   loadedRange,
   minutesOfDay,
+  nextVisitStart,
   overlaps,
   weekDays,
 } from "./calendar.ts";
@@ -164,4 +165,52 @@ test("завантажений діапазон накриває весь міс
 
 test("крок назад через межу місяця потребує запиту", () => {
   assert.equal(isRangeLoaded(addDays(d(2026, 8, 3), -7), d(2026, 8, 10)), false);
+});
+
+test("наступний візит — рівно через тиждень", () => {
+  const previous = new Date(2026, 7, 18, 14, 30);
+  const next = nextVisitStart(previous);
+
+  assert.equal(next.getDate(), 25);
+  assert.equal(next.getMonth(), 7);
+  assert.equal(next.getHours(), 14);
+  assert.equal(next.getMinutes(), 30);
+});
+
+test("крок у кілька тижнів рахується так само", () => {
+  const previous = new Date(2026, 7, 18, 10, 0);
+
+  assert.equal(nextVisitStart(previous, 2).getDate(), 1);
+  assert.equal(nextVisitStart(previous, 2).getMonth(), 8);
+});
+
+test("перехід на зимовий час зберігає годину візиту", () => {
+  // Останні вихідні жовтня: годинник переводять назад. Якби крок рахувався в
+  // мілісекундах, візит «о 14:00» переїхав би на 13:00 — і клієнт прийшов би
+  // не в той час.
+  const beforeDst = new Date(2026, 9, 20, 14, 0);
+  const next = nextVisitStart(beforeDst);
+
+  assert.equal(next.getHours(), 14, "година візиту з'їхала на переході");
+  assert.equal(next.getDate(), 27);
+});
+
+test("перехід на літній час так само зберігає годину", () => {
+  // Останні вихідні березня — годинник переводять уперед.
+  const beforeDst = new Date(2026, 2, 25, 9, 0);
+  const next = nextVisitStart(beforeDst);
+
+  assert.equal(next.getHours(), 9);
+  assert.equal(next.getDate(), 1);
+  assert.equal(next.getMonth(), 3);
+});
+
+test("повтор не змінює вихідну дату", () => {
+  // Date мутабельний — якби nextVisitStart правив аргумент, картка запису на
+  // екрані показала б чужий час.
+  const previous = new Date(2026, 7, 18, 14, 30);
+  nextVisitStart(previous);
+
+  assert.equal(previous.getDate(), 18);
+  assert.equal(previous.getHours(), 14);
 });

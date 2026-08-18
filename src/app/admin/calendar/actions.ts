@@ -56,7 +56,7 @@ export async function saveAppointment(
     fieldErrors.name = "Вкажіть ім'я клієнта.";
   }
   if (!isValidPhone(input.phone)) {
-    fieldErrors.phone = "Номер у форматі +380 XX XXX XX XX.";
+    fieldErrors.phone = "Номер телефону — 0XX XXX XX XX або +380 XX XXX XX XX.";
   }
   if (!input.serviceId) {
     fieldErrors.service = "Оберіть послугу.";
