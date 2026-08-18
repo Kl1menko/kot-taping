@@ -1,10 +1,4 @@
-import Image from "next/image";
-import {
-  TONE_CLASS,
-  formatPrice,
-  serviceMeta,
-  type Service,
-} from "@/lib/services";
+import { TONE_CLASS, formatPrice, type Service } from "@/lib/services";
 import { BookNowButton } from "./book-now-button";
 
 /**
@@ -18,40 +12,36 @@ import { BookNowButton } from "./book-now-button";
  * Розмітка `<article>` на кожну картку — не для краси: список послуг зі
  * `<h3>`, ціною та описом читається з екрана як окремі одиниці, а не як суцільне
  * полотно тексту.
+ *
+ * Фото тут немає навмисно, хоч на лендінгу воно є. Знімок один на категорію, а
+ * на цій сторінці всі картки — з однієї категорії: три однакові портрети в ряд
+ * читаються як помилка верстки, та ще й під тим самим фото в героєві. Замість
+ * нього — теплий блок кольору послуги: `sand`/`clay`/`blush` уже лежать у
+ * даних, розрізняють сусідні картки й тримають ту саму палітру, що й лендінг.
  */
 export function ServiceList({ services }: { services: Service[] }) {
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {services.map((service, i) => {
-        const meta = serviceMeta(service);
+    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {services.map((service) => {
+        // Не `serviceMeta`: він підставляє `badge`, коли немає `wear`, а бейдж
+        // уже стоїть у кольоровому блоці — вийшов би той самий рядок двічі.
+        const meta = service.wear;
         return (
           <li key={service.slug}>
-            <article className="flex h-full flex-col rounded-[26px] bg-surface p-3">
+            <article className="flex h-full flex-col rounded-[26px] bg-surface p-3 transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-soft)] hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.3)] motion-reduce:transform-none">
+              {/* Кольоровий блок замість фото: він і розділяє сусідні картки, і
+                  тримає ціну — найбільше число картки на найтихішому тлі. */}
               <div
-                className={`relative aspect-[4/5] overflow-hidden rounded-[20px] ${TONE_CLASS[service.tone]}`}
+                className={`relative flex min-h-[132px] items-end justify-between gap-3 overflow-hidden rounded-[20px] p-5 ${TONE_CLASS[service.tone]}`}
               >
-                <Image
-                  src={`/images/services/${service.category}.jpg`}
-                  alt=""
-                  fill
-                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                  // Перші дві картки вантажимо звичайно, решту — ліниво.
-                  // Верхні дві часто потрапляють у перший екран і тоді
-                  // визначають LCP, а `loading="lazy"` на них його відкладає.
-                  loading={i < 2 ? "eager" : "lazy"}
-                  className="object-cover"
-                />
-
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/25 to-transparent"
-                />
-
-                <div className="absolute inset-x-3 bottom-3 flex items-center justify-end">
-                  <span className="tnum grid min-h-[44px] shrink-0 place-items-center whitespace-nowrap rounded-full bg-ink px-4 text-[15px] text-white">
-                    {formatPrice(service)}
+                <span className="tnum text-[30px] leading-none sm:text-[34px]">
+                  {formatPrice(service)}
+                </span>
+                {service.badge && (
+                  <span className="rounded-full bg-surface/70 px-3 py-1.5 text-[13px] text-ink-muted">
+                    {service.badge}
                   </span>
-                </div>
+                )}
               </div>
 
               <div className="mt-3 flex flex-1 flex-col rounded-[20px] bg-canvas p-5">
@@ -60,7 +50,7 @@ export function ServiceList({ services }: { services: Service[] }) {
                   {service.summary}
                 </p>
 
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
                   {meta ? (
                     <span className="tnum text-[14px] text-ink-muted">
                       <span aria-hidden="true">/ </span>

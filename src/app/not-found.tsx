@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Card, Container, PillButton, SectionLabel } from "@/components/ui";
+import { Card, Container, Eyebrow, PillButton } from "@/components/ui";
 import { CATEGORIES } from "@/lib/services";
 import { LOCATIONS } from "@/lib/contacts";
 
@@ -24,8 +24,8 @@ export default function NotFound() {
     <main id="main">
       <Card as="section" tone="canvas" className="py-24 md:py-32">
         <Container>
-          <SectionLabel>404</SectionLabel>
-          <h1 className="mt-8 max-w-[20ch] text-[34px] leading-[1.1] sm:text-[44px] lg:text-[52px]">
+          <Eyebrow>Помилка 404</Eyebrow>
+          <h1 className="mt-6 max-w-[20ch] text-[36px] leading-[1.05] sm:text-[48px] lg:text-[60px]">
             Такої сторінки немає
           </h1>
           <p className="mt-6 max-w-[52ch] text-[17px] leading-relaxed text-ink-muted">
