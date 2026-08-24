@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/session";
 import {
   createClient,
+  deleteClient,
   findClientByPhone,
   updateClient,
   updateClientNotes,
@@ -123,4 +124,32 @@ export async function createClientAction(
 
   revalidatePath("/admin/clients");
   return { status: "success", message: "Клієнтку додано." };
+}
+
+/**
+ * Видалити картку клієнта.
+ *
+ * Видаляються лише картки без жодного візиту — дублікати й помилково заведені.
+ * Клієнта з історією база не віддасть (`on delete restrict` у 0001), і це
+ * правильно: візити це проведена робота й отримані гроші.
+ *
+ * Повертає результат, а не кидає: відмова «у клієнта є візити» — це не збій,
+ * а нормальна відповідь, і показати її треба в самій картці, поруч із
+ * кнопкою, а не екраном помилки.
+ */
+export async function deleteClientAction(
+  id: string,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireSession();
+
+  if (!id.trim()) return { ok: false, message: "Клієнта не вказано." };
+
+  const result = await deleteClient(id);
+  if (!result.ok) return { ok: false, message: result.message };
+
+  revalidatePath("/admin/clients");
+  // Картка могла бути відкрита зі списку записів — там її теж уже немає.
+  revalidatePath("/admin/calendar");
+
+  return { ok: true };
 }

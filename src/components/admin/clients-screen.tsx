@@ -1,10 +1,12 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import {
   createClientAction,
   saveClient,
+  deleteClientAction,
   saveClientNotes,
   type ClientState,
 } from "@/app/admin/clients/actions";
@@ -30,6 +32,7 @@ export function ClientsScreen({
   /** Список упрів у ліміт — показуємо це, а не вдаємо, що клієнтів рівно стільки. */
   hasMore?: boolean;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<ClientWithStats | null>(null);
   const [creating, setCreating] = useState(false);
@@ -196,7 +199,18 @@ export function ClientsScreen({
         title="Клієнт"
       >
         {active && (
-          <ClientDetails client={active} onClose={() => setActive(null)} />
+          <ClientDetails
+            client={active}
+            onClose={() => setActive(null)}
+            onDeleted={() => {
+              setActive(null);
+              // Список приходить пропом із сервера, тож без `refresh` видалена
+              // картка лишалась би на екрані до наступного переходу.
+              // Заразом скидаємо добірку з бази: у ній теж є видалений рядок.
+              setRemote(null);
+              router.refresh();
+            }}
+          />
         )}
       </Sheet>
 
@@ -305,13 +319,48 @@ function SubmitClient() {
 function ClientDetails({
   client,
   onClose,
+  onDeleted,
 }: {
   client: ClientWithStats;
   onClose: () => void;
+  onDeleted: () => void;
 }) {
   const [notesState, notesAction] = useActionState(saveClientNotes, INITIAL);
   const [editing, setEditing] = useState(false);
   const [visits, setVisits] = useState<AppointmentWithRefs[] | null>(null);
+
+  /** Підтвердження видалення: перший тап питає, другий видаляє. */
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  /**
+   * Картку з візитами видалити не можна — база боронить це `on delete
+   * restrict` (0001), бо візит це проведена робота й отримані гроші.
+   *
+   * Тому кнопки для таких карток немає зовсім: пропонувати дію, яка завжди
+   * відмовить, гірше, ніж не пропонувати її. Видаляються дублікати й
+   * помилково заведені картки — саме в них візитів і немає.
+   *
+   * `visits === null` означає «історія ще вантажиться»: доти не показуємо
+   * нічого, інакше кнопка блимала б і зникала.
+   */
+  const canDelete = visits !== null && visits.length === 0;
+
+  const remove = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+
+    const result = await deleteClientAction(client.id);
+    if (!result.ok) {
+      setDeleteError(result.message ?? "Не вдалося видалити.");
+      setDeleting(false);
+      setConfirmingDelete(false);
+      return;
+    }
+
+    onDeleted();
+  };
 
   // Історія тягнеться при відкритті картки, а не разом зі списком: інакше
   // телефони й медичні нотатки всіх клієнтів лежали б у HTML сторінки.
@@ -446,6 +495,45 @@ function ClientDetails({
           Закрити
         </Button>
       </div>
+
+      {canDelete && (
+        <div className="mt-4 border-t border-line pt-4">
+          {confirmingDelete ? (
+            <div>
+              <p className="text-[14px] leading-relaxed text-ink-muted">
+                Видалити картку {client.name}? Цю дію не скасувати.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button tone="light" onClick={() => setConfirmingDelete(false)}>
+                  Скасувати
+                </Button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={remove}
+                  className="min-h-[52px] cursor-pointer rounded-full bg-[#b3261e] px-6 text-[15px] text-white transition-colors duration-200 hover:bg-[#8f1e18] disabled:cursor-wait"
+                >
+                  {deleting ? "Видаляю…" : "Видалити"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              className="cursor-pointer text-[14px] text-ink-muted transition-colors duration-200 hover:text-[#b3261e]"
+            >
+              Видалити картку
+            </button>
+          )}
+
+          {deleteError && (
+            <p role="alert" className="mt-3 text-[14px] text-[#b3261e]">
+              {deleteError}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

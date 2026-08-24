@@ -273,3 +273,60 @@ export async function searchClients(
     hasMore: rows.length > CLIENTS_PAGE_SIZE,
   };
 }
+
+/**
+ * Видалити клієнта.
+ *
+ * Лише того, у кого немає жодного візиту: у базі на `appointments.client_id`
+ * стоїть `on delete restrict` (0001), і це навмисно — візит це проведена
+ * робота й отримані гроші, тобто історія студії, а не властивість картки.
+ * Каскад тут тихо переписував би минуле, а «видалити клієнта разом із його
+ * оплатами» — не та дія, яку можна зробити випадковим тапом.
+ *
+ * Тому перевіряємо до видалення й повертаємо зрозумілу відмову. Покластись на
+ * констрейнт означало б показати майстрині «violates foreign key constraint»
+ * замість «у клієнта є візити».
+ *
+ * Реальний випадок, заради якого це потрібно, — дублікат або помилково
+ * заведена картка: саме в них візитів і немає.
+ */
+export async function deleteClient(
+  id: string,
+): Promise<{ ok: true } | { ok: false; reason: "has-visits" | "failed"; message: string }> {
+  // `head: true` — потрібна лише кількість, самі рядки не читаємо.
+  const { count, error: countError } = await db()
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", id);
+
+  if (countError) {
+    return {
+      ok: false,
+      reason: "failed",
+      message: `Не вдалося перевірити візити: ${countError.message}`,
+    };
+  }
+
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      reason: "has-visits",
+      message:
+        count === 1
+          ? "У клієнта є 1 візит — картку з історією видалити не можна."
+          : `У клієнта є ${count} візити(ів) — картку з історією видалити не можна.`,
+    };
+  }
+
+  const { error } = await db().from("clients").delete().eq("id", id);
+
+  if (error) {
+    return {
+      ok: false,
+      reason: "failed",
+      message: `Не вдалося видалити: ${error.message}`,
+    };
+  }
+
+  return { ok: true };
+}
