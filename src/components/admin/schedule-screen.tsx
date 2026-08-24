@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   bulkSetWorkingDays,
-  setDayHours,
+  setDayIntervals,
   setDayNote,
   toggleWorkingDay,
 } from "@/app/admin/schedule/actions";
@@ -21,8 +21,12 @@ import {
   formatTime,
   hoursFor,
   hoursLabel,
+  intervalsFor,
   isWorkingDay,
+  parseTime,
   toSchedule,
+  type Interval,
+  type Schedule,
   type WorkingDay,
 } from "@/lib/schedule";
 import type { LocationRow } from "@/lib/db/types";
@@ -31,6 +35,27 @@ import { Button, EmptyState } from "./ui";
 import { INPUT_CLS } from "@/lib/form";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
+
+/**
+ * Години, якими день малюється одразу після тапу, поки сервер не відповів.
+ * Дзеркалять DEFAULT_OPENS/DEFAULT_CLOSES з actions.ts: тут вони потрібні лише
+ * щоб намалювати клітинку, а справжнє значення приїде з наступним рендером.
+ */
+const OPTIMISTIC_OPENS = 10 * 60;
+const OPTIMISTIC_CLOSES = 18 * 60;
+
+/** Типові розклади дня одним тапом — зокрема з перервою на обід. */
+const PRESETS: { label: string; parts: [string, string][] }[] = [
+  { label: "10:00–18:00", parts: [["10:00", "18:00"]] },
+  { label: "09:00–20:00", parts: [["09:00", "20:00"]] },
+  {
+    label: "З перервою",
+    parts: [
+      ["10:00", "14:00"],
+      ["15:00", "19:00"],
+    ],
+  },
+];
 
 /**
  * Графік роботи: які дні відкриті для запису в кожному кабінеті.
@@ -55,9 +80,49 @@ export function ScheduleScreen({
   const [pending, startTransition] = useTransition();
   const [openDay, setOpenDay] = useState<string | null>(null);
 
-  const schedule = useMemo(() => toSchedule(days), [days]);
+  const serverSchedule = useMemo(() => toSchedule(days), [days]);
+
+  /**
+   * Графік з уже врахованими, але ще не підтвердженими тапами.
+   *
+   * Кожен тап раніше чекав на сервер: запис, `revalidatePath`, `router.refresh`
+   * — і лише тоді число ставало чорним. На проставлянні місяця це двадцять
+   * послідовних пауз, через які здавалось, що адмінка гальмує. Тепер клітинка
+   * перемикається одразу, а запис їде слідом; розійдись вони — наступний
+   * `refresh` поверне стан бази.
+   */
+  const [schedule, applyOptimistic] = useOptimistic(
+    serverSchedule,
+    (current: Schedule, change: { days: string[]; open: boolean }) => {
+      const next = new Map(current);
+      for (const day of change.days) {
+        if (change.open) {
+          next.set(
+            day,
+            next.get(day) ?? [
+              { opensAt: OPTIMISTIC_OPENS, closesAt: OPTIMISTIC_CLOSES },
+            ],
+          );
+        } else {
+          next.delete(day);
+        }
+      }
+      return next;
+    },
+  );
+
   const grid = useMemo(() => monthGrid(month), [month]);
   const today = dateKey(startOfDay(new Date()));
+
+  /**
+   * Малювання протягуванням: провести пальцем по числах — відкрити їх разом.
+   *
+   * Проставити місяць двадцятьма окремими тапами означало двадцять записів,
+   * двадцять скидів кешу й двадцять пауз. Протягування збирає їх в одну масову
+   * дію, яка їде одним запитом уже після того, як палець відпустили.
+   */
+  const [painted, setPainted] = useState<Set<string> | null>(null);
+  const painting = painted !== null;
 
   /** Навігація місяцями й кабінетами — через URL, щоб стан переживав оновлення. */
   const go = (next: { month?: string; location?: string }) => {
@@ -84,8 +149,15 @@ export function ScheduleScreen({
 
   const locationId = activeLocation.id;
 
-  const run = (fn: () => Promise<void>) => {
+  /**
+   * Дія над графіком: спершу малюємо результат, потім пишемо.
+   *
+   * `applyOptimistic` має бути викликаний усередині транзиції — інакше React
+   * відкине зміну одразу ж, ще до відповіді сервера.
+   */
+  const run = (change: { days: string[]; open: boolean }, fn: () => Promise<void>) => {
     startTransition(async () => {
+      applyOptimistic(change);
       await fn();
       router.refresh();
     });
@@ -104,7 +176,49 @@ export function ScheduleScreen({
     const keys = target.map(dateKey);
     // Усі вже відкриті — тап по тому самому підпису закриває їх.
     const allOpen = keys.every((k) => isWorkingDay(schedule, k));
-    run(() => bulkSetWorkingDays(locationId, keys, !allOpen));
+    run({ days: keys, open: !allOpen }, () =>
+      bulkSetWorkingDays(locationId, keys, !allOpen),
+    );
+  };
+
+  /** Веде палець від першого числа: набір росте, поки кнопку не відпустили. */
+  const startPaint = (key: string) => setPainted(new Set([key]));
+
+  const extendPaint = (key: string) => {
+    setPainted((current) => {
+      if (!current || current.has(key)) return current;
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+  };
+
+  /**
+   * Палець відпустили. Один день — це звичайний тап (відкрити або відкрити
+   * лист); кілька — масова дія одним запитом.
+   */
+  const commitPaint = () => {
+    if (!painted) return;
+    setPainted(null);
+
+    const keys = [...painted].sort();
+    if (keys.length === 1) {
+      const [key] = keys;
+      if (isWorkingDay(schedule, key)) {
+        setOpenDay(key);
+      } else {
+        run({ days: keys, open: true }, () =>
+          toggleWorkingDay(locationId, key, false),
+        );
+      }
+      return;
+    }
+
+    // Провели по числах — відкриваємо всі. Закриття лишається за підписом дня
+    // тижня й кнопкою місяця: протягування частіше означає «працюю ці дні».
+    run({ days: keys, open: true }, () =>
+      bulkSetWorkingDays(locationId, keys, true),
+    );
   };
 
   const openCount = countInMonth(schedule, month);
@@ -183,7 +297,15 @@ export function ScheduleScreen({
           ))}
         </div>
 
-        <div className="mt-1 grid grid-cols-7 gap-1">
+        {/* `touch-none`, щоб протягування по числах малювало, а не гортало
+            сторінку; `onPointerUp` на контейнері — палець може піднятись і
+            між клітинками. */}
+        <div
+          className="mt-1 grid touch-none grid-cols-7 gap-1"
+          onPointerUp={commitPaint}
+          onPointerLeave={commitPaint}
+          onPointerCancel={() => setPainted(null)}
+        >
           {grid.map((date) => {
             const key = dateKey(date);
             const working = isWorkingDay(schedule, key);
@@ -195,23 +317,52 @@ export function ScheduleScreen({
               <button
                 key={key}
                 type="button"
-                disabled={pending}
-                onClick={() => run(() => toggleWorkingDay(locationId, key))}
-                onContextMenu={(e) => {
-                  // Правий клік / довгий тап — проміжки й нотатка.
-                  e.preventDefault();
+                // `disabled={pending}` тут не стоїть навмисно: він глушив усі
+                // 42 клітинки на час запису, тож швидкі тапи поспіль губились
+                // і доводилось чекати після кожного числа. Записи незалежні —
+                // кожен по своїй даті, — а стан клітинки й так уже намальовано.
+                // Закритий день тап відкриває типовими годинами; відкритий —
+                // веде в лист, де ці години правлять. Довгий тап тут був
+                // єдиним шляхом до годин, і на телефоні його немає: браузер
+                // не шле `contextmenu` по утриманню кнопки, тож години
+                // лишались недосяжними всюди, крім десктопа з мишею.
+                // Дію робить не `onClick`, а підняття пальця (`commitPaint`):
+                // інакше протягування по числах давало б і серію кліків, і
+                // масову дію поверх них.
+                onPointerDown={(e) => {
+                  // Захоплення заважає `pointerenter` на сусідніх клітинках —
+                  // без цього браузер шле всі події лише першій кнопці.
+                  e.currentTarget.releasePointerCapture?.(e.pointerId);
+                  startPaint(key);
+                }}
+                onPointerEnter={() => painting && extendPaint(key)}
+                // Клавіатура подій вказівника не шле, тож Enter/Space лишились
+                // би без дії. `detail === 0` відрізняє їх від кліку мишею,
+                // який уже опрацьовано підняттям пальця.
+                onClick={(e) => {
+                  if (e.detail !== 0) return;
                   if (working) setOpenDay(key);
+                  else
+                    run({ days: [key], open: true }, () =>
+                      toggleWorkingDay(locationId, key, false),
+                    );
                 }}
                 aria-pressed={working}
                 aria-label={
                   hours
-                    ? `${dayTitle(date)} — ${hoursLabel(hours)}`
-                    : `${dayTitle(date)} — вихідний`
+                    ? `${dayTitle(date)} — ${intervalsFor(schedule, key)
+                        .map(hoursLabel)
+                        .join(", ")}, змінити години`
+                    : `${dayTitle(date)} — вихідний, відкрити день`
                 }
                 className={[
                   "tnum relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl text-[15px]",
-                  "transition-colors duration-200 disabled:cursor-wait",
-                  working
+                  "transition-colors duration-200",
+                  // Утримання пальця на числі більше нічого не робить, але
+                  // браузер на телефоні все одно виділяв би цифру й показував
+                  // лупу з «копіювати» — шум там, де чекають на тап.
+                  "touch-manipulation select-none",
+                  working || painted?.has(key)
                     ? "bg-ink text-white hover:bg-[#2a2a2a]"
                     : "bg-canvas text-ink hover:bg-sand",
                   outside ? "opacity-40" : "",
@@ -229,6 +380,14 @@ export function ScheduleScreen({
                     {formatTime(hours.opensAt)}
                   </span>
                 )}
+                {/* Крапка — ознака перерви: день 10:00–19:00 з обідом і без
+                    нього виглядали б однаково, а це різний розклад. */}
+                {intervalsFor(schedule, key).length > 1 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-1.5 top-1.5 size-1 rounded-full bg-current opacity-70"
+                  />
+                )}
               </button>
             );
           })}
@@ -238,7 +397,7 @@ export function ScheduleScreen({
           <Button
             tone="light"
             onClick={() =>
-              run(() =>
+              run({ days: ownDays.map(dateKey), open: true }, () =>
                 bulkSetWorkingDays(locationId, ownDays.map(dateKey), true),
               )
             }
@@ -249,7 +408,7 @@ export function ScheduleScreen({
           <Button
             tone="light"
             onClick={() =>
-              run(() =>
+              run({ days: ownDays.map(dateKey), open: false }, () =>
                 bulkSetWorkingDays(locationId, ownDays.map(dateKey), false),
               )
             }
@@ -265,7 +424,9 @@ export function ScheduleScreen({
               const week = Array.from({ length: 7 }, (_, i) =>
                 dateKey(addDays(from, i)),
               );
-              run(() => bulkSetWorkingDays(locationId, week, true));
+              run({ days: week, open: true }, () =>
+                bulkSetWorkingDays(locationId, week, true),
+              );
             }}
             disabled={pending}
           >
@@ -274,17 +435,20 @@ export function ScheduleScreen({
         </div>
 
         <p className="mt-4 text-[13px] leading-relaxed text-ink-muted">
-          Тап по числу відкриває або закриває день (типово 10:00–18:00).
-          Довгий тап (правий клік) на відкритому дні — щоб змінити години чи
-          додати нотатку. Тап по підпису дня тижня перемикає всі такі дні
-          місяця.
+          Тап по закритому числу відкриває день (типово 10:00–18:00). Тап по
+          відкритому — лист, де правляться години, нотатка і де день можна
+          закрити. Тап по підпису дня тижня перемикає всі такі дні місяця.
         </p>
       </div>
 
       {openDay && hoursFor(schedule, openDay) && (
         <DaySheet
+          // Ключ по даті: поля годин ініціалізуються з `useState` при
+          // монтуванні, і без цього другий відкритий день перевикористав би
+          // той самий інстанс — у формі стояли б години попереднього дня.
+          key={openDay}
           day={openDay}
-          hours={hoursFor(schedule, openDay)!}
+          intervals={intervalsFor(schedule, openDay)}
           note={days.find((d) => d.day === openDay)?.note ?? ""}
           pending={pending}
           onClose={() => setOpenDay(null)}
@@ -293,51 +457,99 @@ export function ScheduleScreen({
             setOpenDay(null);
             router.refresh();
           }}
-          onSaveNote={(note) => run(() => setDayNote(locationId, openDay, note))}
+          onCloseDay={() => {
+            setOpenDay(null);
+            run({ days: [openDay], open: false }, () =>
+              toggleWorkingDay(locationId, openDay, true),
+            );
+          }}
         />
       )}
     </>
   );
 }
 
-/** Години й нотатка одного дня. */
+/** Відрізки часу й нотатка одного дня. */
 function DaySheet({
   day,
-  hours,
+  intervals,
   note,
   pending,
   locationId,
   onClose,
   onDone,
-  onSaveNote,
+  onCloseDay,
 }: {
   day: string;
-  hours: { opensAt: number; closesAt: number };
+  intervals: Interval[];
   note: string;
   pending: boolean;
   locationId: string;
   onClose: () => void;
   onDone: () => void;
-  onSaveNote: (note: string) => void;
+  onCloseDay: () => void;
 }) {
   const [y, m, d] = day.split("-").map(Number);
   const date = new Date(y, m - 1, d);
 
-  const [opens, setOpens] = useState(formatTime(hours.opensAt));
-  const [closes, setCloses] = useState(formatTime(hours.closesAt));
+  /** Чернетка відрізків — рядками, бо саме так їх віддає `<input type="time">`. */
+  const [draft, setDraft] = useState(() =>
+    intervals.map((i) => ({
+      opens: formatTime(i.opensAt),
+      closes: formatTime(i.closesAt),
+    })),
+  );
   const [draftNote, setDraftNote] = useState(note);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 
+  const busy = pending || saving;
+
+  const patch = (index: number, key: "opens" | "closes", value: string) => {
+    setDraft((current) =>
+      current.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
+    );
+  };
+
+  /**
+   * Новий відрізок починається там, де скінчився останній, плюс година
+   * перерви: найчастіший намір — «а потім ще ввечері», і пропонувати для
+   * нього порожні поля означало б набирати час, який і так очевидний.
+   */
+  const addInterval = () => {
+    setDraft((current) => {
+      const last = current[current.length - 1];
+      const from = last ? (parseTime(last.closes) ?? 14 * 60) + 60 : 10 * 60;
+      const start = Math.min(from, 22 * 60);
+      return [
+        ...current,
+        { opens: formatTime(start), closes: formatTime(Math.min(start + 120, 23 * 60 + 30)) },
+      ];
+    });
+  };
+
+  const removeInterval = (index: number) => {
+    setDraft((current) => current.filter((_, i) => i !== index));
+  };
+
   const save = () => {
     setError(null);
     startSaving(async () => {
-      const result = await setDayHours(locationId, day, opens, closes);
+      const result = await setDayIntervals(
+        locationId,
+        day,
+        draft.map((row) => ({ opensAt: row.opens, closesAt: row.closes })),
+      );
       if (!result.ok) {
         setError(result.message ?? "Не вдалося зберегти.");
         return;
       }
-      if (draftNote !== note) onSaveNote(draftNote);
+      // Нотатку чекаємо тут, а не лишаємо окремій транзиції: лист закривався
+      // одразу після годин, і запис нотатки летів у вже розмонтований
+      // компонент — зміна мовчки губилась.
+      if (draftNote !== note) {
+        await setDayNote(locationId, day, draftNote);
+      }
       onDone();
     });
   };
@@ -345,54 +557,83 @@ function DaySheet({
   return (
     <Sheet open onClose={onClose} title={dayTitle(date)}>
       <p className="text-[15px] text-ink-muted">
-        Клієнт бачить час на запис у цих межах, із кроком 30 хвилин.
+        Клієнт бачить час на запис у цих відрізках, із кроком 30 хвилин. Кілька
+        відрізків — це перерва між ними: обід, виїзд, дорога.
       </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-[14px] text-ink-muted">Початок</span>
-          <input
-            type="time"
-            value={opens}
-            step={1800}
-            disabled={pending || saving}
-            onChange={(e) => setOpens(e.target.value)}
-            className={`${INPUT_CLS} cursor-pointer`}
-          />
-        </label>
-        <label className="block">
-          <span className="text-[14px] text-ink-muted">Кінець</span>
-          <input
-            type="time"
-            value={closes}
-            step={1800}
-            disabled={pending || saving}
-            onChange={(e) => setCloses(e.target.value)}
-            className={`${INPUT_CLS} cursor-pointer`}
-          />
-        </label>
+      <div className="mt-5 space-y-3">
+        {draft.map((row, index) => (
+          <div key={index} className="flex items-end gap-2">
+            <label className="block flex-1">
+              <span className="text-[14px] text-ink-muted">Початок</span>
+              <input
+                type="time"
+                value={row.opens}
+                step={1800}
+                disabled={busy}
+                onChange={(e) => patch(index, "opens", e.target.value)}
+                className={`${INPUT_CLS} cursor-pointer`}
+              />
+            </label>
+            <label className="block flex-1">
+              <span className="text-[14px] text-ink-muted">Кінець</span>
+              <input
+                type="time"
+                value={row.closes}
+                step={1800}
+                disabled={busy}
+                onChange={(e) => patch(index, "closes", e.target.value)}
+                className={`${INPUT_CLS} cursor-pointer`}
+              />
+            </label>
+
+            {/* Останній відрізок прибрати не можна: день без жодного виглядав
+                би відкритим, але записатись у нього не було б як. Щоб зовсім
+                не працювати — «Зробити вихідним» нижче. */}
+            <button
+              type="button"
+              disabled={busy || draft.length === 1}
+              onClick={() => removeInterval(index)}
+              aria-label={`Прибрати відрізок ${row.opens}–${row.closes}`}
+              className="mb-1 grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-canvas text-ink-muted transition-colors duration-200 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 12h12" />
+              </svg>
+            </button>
+          </div>
+        ))}
       </div>
 
-      {/* Найчастіші розклади одним тапом: набирати 10:00 і 18:00 вручну
-          двадцять разів на місяць — саме та робота, від якої графік мав
-          позбавити. */}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {[
-          ["10:00", "18:00"],
-          ["09:00", "20:00"],
-          ["12:00", "20:00"],
-        ].map(([from, to]) => (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={addInterval}
+        className="mt-3 min-h-[44px] cursor-pointer rounded-full bg-canvas px-5 text-[14px] text-ink-muted transition-colors duration-200 hover:text-ink disabled:cursor-not-allowed"
+      >
+        + Ще відрізок
+      </button>
+
+      {/* Найчастіші розклади одним тапом: набирати їх вручну двадцять разів на
+          місяць — саме та робота, від якої графік мав позбавити. */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {PRESETS.map((preset) => (
           <button
-            key={`${from}-${to}`}
+            key={preset.label}
             type="button"
-            disabled={pending || saving}
-            onClick={() => {
-              setOpens(from);
-              setCloses(to);
-            }}
+            disabled={busy}
+            onClick={() => setDraft(preset.parts.map(([opens, closes]) => ({ opens, closes })))}
             className="cursor-pointer rounded-full bg-canvas px-4 py-2 text-[13px] text-ink-muted transition-colors duration-200 hover:text-ink disabled:cursor-not-allowed"
           >
-            {from}–{to}
+            {preset.label}
           </button>
         ))}
       </div>
@@ -419,13 +660,24 @@ function DaySheet({
       )}
 
       <div className="mt-6 flex gap-2">
-        <Button full disabled={pending || saving} onClick={save}>
+        <Button full disabled={busy} onClick={save}>
           {saving ? "Зберігаю…" : "Зберегти"}
         </Button>
         <Button tone="light" onClick={onClose}>
-          Закрити
+          Скасувати
         </Button>
       </div>
+
+      {/* Тап по відкритому числу тепер веде сюди, тож зробити день вихідним
+          можна лише звідси — інакше закритий день не було б як повернути. */}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onCloseDay}
+        className="mt-4 w-full cursor-pointer rounded-full py-3 text-[14px] text-ink-muted transition-colors duration-200 hover:text-ink disabled:cursor-not-allowed"
+      >
+        Зробити вихідним
+      </button>
     </Sheet>
   );
 }

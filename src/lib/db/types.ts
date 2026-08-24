@@ -58,16 +58,38 @@ export type WorkingDayRow = {
   /** `2026-08-08` — колонка `date`, без часу й зони. */
   day: string;
   /**
-   * Межі робочого дня — колонка `time`, тобто рядок «10:00:00».
+   * Межі робочого дня цілком — колонка `time`, рядок «10:00:00».
+   *
+   * Від міграції 0013 це похідні значення: найраніший початок і найпізніший
+   * кінець серед `working_day_intervals`, які тримає тригер у базі. З коду їх
+   * писати не треба — справжній розклад лежить у відрізках, а ця пара лишена
+   * для читання дня без джойна.
    *
    * Проміжки ранок/день/вечір із анкети тут НЕ зберігаються: вони рахуються
-   * з цих меж (`slotsFromHours` у @/lib/schedule). Друга колонка з ними була б
-   * другим джерелом правди, яке рано чи пізно розійшлося б із розкладом.
+   * з відрізків (`slotsFromHours` у @/lib/schedule). Друга колонка з ними була
+   * б другим джерелом правди, яке рано чи пізно розійшлося б із розкладом.
    */
   opens_at: string;
   closes_at: string;
   /** Нотатка майстрині для себе. Клієнтка її не бачить. */
   note: string | null;
+  created_at: string;
+};
+
+/**
+ * Відрізок робочого часу в межах дня — «10:00–14:00». Міграція 0013.
+ *
+ * Днів з кількома відрізками більшість: майстриня приймає зранку, їде на обід
+ * чи на виїзд і повертається на вечір. `working_days.opens_at`/`closes_at`
+ * лишились як межі дня цілком і тримаються тригером — писати їх з коду не
+ * треба й не можна.
+ */
+export type WorkingDayIntervalRow = {
+  id: string;
+  working_day_id: string;
+  /** Колонка `time`, тобто рядок «10:00:00». */
+  opens_at: string;
+  closes_at: string;
   created_at: string;
 };
 
@@ -251,6 +273,10 @@ export type Database = {
       services: Table<ServiceRow>;
       locations: Table<LocationRow>;
       working_days: Table<WorkingDayRow>;
+      working_day_intervals: Table<
+        WorkingDayIntervalRow,
+        [WorkingDayIntervalsRelation]
+      >;
       clients: Table<ClientRow>;
       appointments: Table<AppointmentRow>;
       requests: Table<RequestRow>;
@@ -299,9 +325,26 @@ export type Database = {
  * Поля з `default` у БД не обов'язкові на вставці, а `id`/`created_at` взагалі
  * не мають приходити з коду — звідси Insert як частковий Row без них.
  */
-type Table<Row extends { id: string; created_at: string }> = {
+type Table<
+  Row extends { id: string; created_at: string },
+  // Зв'язки за замовчуванням порожні: вкладені select'и є лише там, де вони
+  // справді потрібні, і описувати решту схеми заради них не варто.
+  Relationships extends readonly unknown[] = [],
+> = {
   Row: Row;
   Insert: Partial<Omit<Row, "id" | "created_at">> & { id?: string };
   Update: Partial<Omit<Row, "id" | "created_at">>;
-  Relationships: [];
+  Relationships: Relationships;
+};
+
+/**
+ * Зв'язок «день → його відрізки»: без нього supabase-js не типізує вкладений
+ * `working_day_intervals ( … )` і віддає `SelectQueryError`.
+ */
+type WorkingDayIntervalsRelation = {
+  foreignKeyName: "working_day_intervals_working_day_id_fkey";
+  columns: ["working_day_id"];
+  isOneToOne: false;
+  referencedRelation: "working_days";
+  referencedColumns: ["id"];
 };

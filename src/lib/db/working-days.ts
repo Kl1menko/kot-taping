@@ -4,6 +4,7 @@ import { db } from "./client";
 import { dateKey, startOfDay } from "@/lib/calendar";
 import {
   formatTime,
+  normalizeIntervals,
   parseTime,
   toSchedule,
   type Schedule,
@@ -28,42 +29,98 @@ import type { WorkingDayRow } from "./types";
 const FALLBACK_OPENS = 9 * 60;
 const FALLBACK_CLOSES = 20 * 60;
 
+/** Рядок відрізка, як його віддає join: «10:00:00». */
+type IntervalRow = { opens_at: string; closes_at: string };
+
 function toWorkingDay(
-  row: Pick<WorkingDayRow, "day" | "opens_at" | "closes_at" | "note">,
+  row: Pick<WorkingDayRow, "day" | "opens_at" | "closes_at" | "note"> & {
+    working_day_intervals?: IntervalRow[] | null;
+  },
 ): WorkingDay {
   // Відкат на робоче вікно, а не пропуск дня: колонки `not null`, тож сюди
   // можна дійти лише з геть несподіваним форматом — і тоді день краще
   // показати з типовими годинами, ніж мовчки прибрати з графіка.
-  return {
-    day: row.day,
-    opensAt: parseTime(row.opens_at) ?? FALLBACK_OPENS,
-    closesAt: parseTime(row.closes_at) ?? FALLBACK_CLOSES,
-    note: row.note,
-  };
+  const parsed = (row.working_day_intervals ?? [])
+    .map((i) => ({
+      opensAt: parseTime(i.opens_at),
+      closesAt: parseTime(i.closes_at),
+    }))
+    .filter(
+      (i): i is { opensAt: number; closesAt: number } =>
+        i.opensAt !== null && i.closesAt !== null,
+    );
+
+  // Відрізків немає — беремо межі самого дня. Так читаються бази, де 0013 ще
+  // не виконана, і день, з якого прибрали останній відрізок: краще показати
+  // його типовими годинами, ніж загубити з графіка мовчки.
+  const intervals =
+    parsed.length > 0
+      ? normalizeIntervals(parsed)
+      : normalizeIntervals([
+          {
+            opensAt: parseTime(row.opens_at) ?? FALLBACK_OPENS,
+            closesAt: parseTime(row.closes_at) ?? FALLBACK_CLOSES,
+          },
+        ]);
+
+  return { day: row.day, intervals, note: row.note };
 }
 
 /**
  * Графік кабінету в межах [from, to] — обидві межі включно, бо це календарні
  * дати, а не моменти часу: «до 31 серпня» означає саме 31-ше.
  */
+/**
+ * Чи це скарга на відсутню таблицю відрізків.
+ *
+ * Код їде на прод раніше, ніж хтось виконає міграцію 0013, — і в цьому вікні
+ * join по `working_day_intervals` не існує. Порожній графік тут закрив би запис
+ * на сайті, тож у такому разі читаємо день по його власних межах: рівно так,
+ * як він працював до відрізків.
+ */
+function isMissingIntervals(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "PGRST200" ||
+    error.code === "42P01" ||
+    /working_day_intervals/.test(error.message ?? "")
+  );
+}
+
+/** Колонки дня без join — відкат, поки міграція 0013 не виконана. */
+const DAY_COLUMNS = "day, opens_at, closes_at, note";
+const DAY_COLUMNS_WITH_INTERVALS = `${DAY_COLUMNS}, working_day_intervals ( opens_at, closes_at )`;
+
 export async function listWorkingDays(
   locationId: string,
   from: string,
   to: string,
 ): Promise<WorkingDay[]> {
-  const { data, error } = await db()
-    .from("working_days")
-    .select("day, opens_at, closes_at, note")
-    .eq("location_id", locationId)
-    .gte("day", from)
-    .lte("day", to)
-    .order("day");
+  const query = (columns: string) =>
+    db()
+      .from("working_days")
+      .select(columns)
+      .eq("location_id", locationId)
+      .gte("day", from)
+      .lte("day", to)
+      .order("day");
+
+  let { data, error } = await query(DAY_COLUMNS_WITH_INTERVALS);
+
+  if (error && isMissingIntervals(error)) {
+    console.warn(
+      "[schedule] немає таблиці working_day_intervals — виконайте міграцію 0013; " +
+        "поки що день читається як один відрізок.",
+    );
+    ({ data, error } = await query(DAY_COLUMNS));
+  }
 
   if (error) {
     throw new Error(`Не вдалося прочитати графік: ${error.message}`);
   }
 
-  return (data ?? []).map(toWorkingDay);
+  return ((data ?? []) as unknown as Parameters<typeof toWorkingDay>[0][]).map(
+    toWorkingDay,
+  );
 }
 
 /**
@@ -91,19 +148,37 @@ export async function listPublicSchedule(
   until.setMonth(until.getMonth() + monthsAhead);
 
   try {
-    const { data, error } = await db()
-      .from("working_days")
-      .select("day, opens_at, closes_at, note, location:locations ( slug, is_active )")
-      .gte("day", dateKey(today))
-      .lte("day", dateKey(until))
-      .order("day");
+    const location = ", location:locations ( slug, is_active )";
+    const query = (columns: string) =>
+      db()
+        .from("working_days")
+        .select(columns + location)
+        .gte("day", dateKey(today))
+        .lte("day", dateKey(until))
+        .order("day");
+
+    let { data, error } = await query(DAY_COLUMNS_WITH_INTERVALS);
+
+    // Те саме вікно між деплоєм і міграцією, що й у `listWorkingDays`. Тут
+    // ціна помилки найвища: без відкату форма запису показала б, що вільних
+    // дат немає зовсім.
+    if (error && isMissingIntervals(error)) {
+      console.warn(
+        "[schedule] немає таблиці working_day_intervals — виконайте міграцію 0013; " +
+          "поки що день читається як один відрізок.",
+      );
+      ({ data, error } = await query(DAY_COLUMNS));
+    }
 
     if (error) throw new Error(error.message);
 
     const rows = (data ?? []) as unknown as (Pick<
       WorkingDayRow,
       "day" | "opens_at" | "closes_at" | "note"
-    > & { location: { slug: string; is_active: boolean } | null })[];
+    > & {
+      working_day_intervals: IntervalRow[] | null;
+      location: { slug: string; is_active: boolean } | null;
+    })[];
 
     // Групуємо по кабінету, деактивовані пропускаючи: кабінет прибрали з
     // сайту — його графік не має лишатись у формі.
@@ -115,8 +190,7 @@ export async function listPublicSchedule(
       // малює, зате поїхала б у HTML кожної сторінки.
       (byLocation[row.location.slug] ??= []).push({
         day: day.day,
-        opensAt: day.opensAt,
-        closesAt: day.closesAt,
+        intervals: day.intervals,
       });
     }
 

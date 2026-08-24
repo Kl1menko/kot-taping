@@ -3,6 +3,10 @@ import { test } from "node:test";
 
 import {
   countInMonth,
+  dayBounds,
+  hoursFor,
+  intervalsFor,
+  normalizeIntervals,
   formatTime,
   hoursLabel,
   initialMonth,
@@ -21,14 +25,27 @@ import {
 /** 8 серпня 2026, 08:00 — до початку будь-якого робочого дня. */
 const MORNING = new Date(2026, 7, 8, 8, 0);
 
+/** День одним відрізком — найчастіший випадок у цих тестах. */
 function schedule(...days: [string, string, string][]) {
   return toSchedule(
     days.map(([day, opens, closes]) => ({
       day,
-      opensAt: parseTime(opens)!,
-      closesAt: parseTime(closes)!,
+      intervals: [{ opensAt: parseTime(opens)!, closesAt: parseTime(closes)! }],
     })),
   );
+}
+
+/** День із кількох відрізків: `withBreak("2026-08-10", ["10:00","14:00"], …)`. */
+function withBreak(day: string, ...parts: [string, string][]) {
+  return toSchedule([
+    {
+      day,
+      intervals: parts.map(([opens, closes]) => ({
+        opensAt: parseTime(opens)!,
+        closesAt: parseTime(closes)!,
+      })),
+    },
+  ]);
 }
 
 test("час розбирається й друкується в один бік", () => {
@@ -59,7 +76,9 @@ test("день поза графіком неробочий", () => {
 
 test("перевернуті межі до графіка не потрапляють", () => {
   // У базі це боронить констрейнт, але сюди дані йдуть і з форми.
-  const s = toSchedule([{ day: "2026-08-10", opensAt: 1080, closesAt: 600 }]);
+  const s = toSchedule([
+    { day: "2026-08-10", intervals: [{ opensAt: 1080, closesAt: 600 }] },
+  ]);
   assert.equal(isWorkingDay(s, "2026-08-10"), false);
 });
 
@@ -175,4 +194,71 @@ test("у місяці рахуються лише його власні дні",
 
 test("підпис годин читається як діапазон", () => {
   assert.equal(hoursLabel({ opensAt: 600, closesAt: 1080 }), "10:00–18:00");
+});
+
+test("час у перерві на запис не пропонується", () => {
+  // Головне, заради чого відрізки й заводились: день 10:00–19:00 з обідом
+  // 14:00–15:00 не має пропонувати 14:00, коли кабінету немає.
+  const s = withBreak("2026-08-10", ["10:00", "14:00"], ["15:00", "19:00"]);
+  const times = timesFor(s, "2026-08-10", MORNING).map(formatTime);
+
+  assert.ok(times.includes("13:30"));
+  assert.ok(!times.includes("14:00"));
+  assert.ok(!times.includes("14:30"));
+  assert.ok(times.includes("15:00"));
+
+  // І перевірка збігається з показаним — інакше форма приймала б час,
+  // якого не малювала.
+  assert.equal(isTimeAvailable(s, "2026-08-10", parseTime("14:00")!, MORNING), false);
+  assert.equal(isTimeAvailable(s, "2026-08-10", parseTime("15:00")!, MORNING), true);
+});
+
+test("відрізки впорядковуються, а суміжні зливаються", () => {
+  // 10:00–14:00 і 14:00–18:00 — це суцільний день, а не перерва нульової
+  // довжини: показати його розривом означало б збрехати про обід.
+  assert.deepEqual(
+    normalizeIntervals([
+      { opensAt: 840, closesAt: 1080 },
+      { opensAt: 600, closesAt: 840 },
+    ]),
+    [{ opensAt: 600, closesAt: 1080 }],
+  );
+
+  // Перекриття теж зливаються: два записи одного часу дали б його двічі.
+  assert.deepEqual(
+    normalizeIntervals([
+      { opensAt: 600, closesAt: 900 },
+      { opensAt: 780, closesAt: 1080 },
+    ]),
+    [{ opensAt: 600, closesAt: 1080 }],
+  );
+
+  // Перевернутий відрізок відкидається, як і раніше пара меж.
+  assert.deepEqual(normalizeIntervals([{ opensAt: 1080, closesAt: 600 }]), []);
+});
+
+test("межі дня — від найранішого початку до найпізнішого кінця", () => {
+  const s = withBreak("2026-08-10", ["10:00", "14:00"], ["16:00", "19:00"]);
+
+  // Підпис у клітинці показує день цілком…
+  assert.equal(hoursLabel(hoursFor(s, "2026-08-10")!), "10:00–19:00");
+  // …а розклад лишається з перервою.
+  assert.equal(intervalsFor(s, "2026-08-10").length, 2);
+  assert.equal(dayBounds([]), null);
+});
+
+test("проміжки анкети рахуються з усіх відрізків", () => {
+  // 10:00–12:00 і 17:00–19:00 — це «ранок і вечір», але не «день»:
+  // між ними кабінет зачинений.
+  const s = withBreak("2026-08-10", ["10:00", "12:00"], ["17:00", "19:00"]);
+  assert.deepEqual(slotsFromHours(intervalsFor(s, "2026-08-10")), [
+    "morning",
+    "evening",
+  ]);
+});
+
+test("день без жодного відрізка до графіка не потрапляє", () => {
+  // Інакше він виглядав би відкритим, але записатись у нього не було б як.
+  const s = toSchedule([{ day: "2026-08-10", intervals: [] }]);
+  assert.equal(isWorkingDay(s, "2026-08-10"), false);
 });

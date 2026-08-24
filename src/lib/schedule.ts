@@ -6,8 +6,9 @@
  * його показують) і Server Action (де його перевіряють). Розійдись правила
  * хоч на крок, і форма показувала б час, який перевірка потім відкидає.
  *
- * День описується парою `opens_at`/`closes_at` — «10:00–18:00». Проміжки
- * ранок/день/вечір із анкети рахуються з цих меж (`slotsFromHours`), а не
+ * День описується набором відрізків — «10:00–14:00» і «16:00–19:00»: майстриня
+ * приймає зранку, їде на обід чи на виїзд і повертається на вечір. Проміжки
+ * ранок/день/вечір із анкети рахуються з них (`slotsFromHours`), а не
  * зберігаються окремо: два джерела правди неминуче розійшлися б, і клієнтка
  * бачила б «вечір» у дні, що закривається о 17:00.
  */
@@ -55,12 +56,58 @@ export function formatTime(minutes: number): string {
  * Години — хвилини від опівночі, вже розібрані: рядок `"10:00:00"` з Postgres
  * розбирається один раз на межі БД, а не в кожному місці, що його читає.
  */
+export type Interval = { opensAt: number; closesAt: number };
+
 export type WorkingDay = {
   day: string;
-  opensAt: number;
-  closesAt: number;
+  /**
+   * Відрізки, коли кабінет справді працює, — «10:00–14:00» і «16:00–19:00».
+   *
+   * Масив, а не пара меж: майстриня приймає зранку, їде на обід чи на виїзд і
+   * повертається на вечір. Одним відрізком 10:00–19:00 форма пропонувала б
+   * запис і на 14:00, коли кабінету немає.
+   *
+   * Порядок — хронологічний, відрізки не перекриваються: те й те боронить
+   * база (міграція 0013), а `normalizeIntervals` тримає ту саму умову для
+   * даних, що прийшли з форми й до бази ще не дійшли.
+   */
+  intervals: Interval[];
   note?: string | null;
 };
+
+/**
+ * Впорядкувати відрізки й злити ті, що торкаються або перекриваються.
+ *
+ * 10:00–14:00 і 14:00–18:00 — це один робочий проміжок 10:00–18:00, і показати
+ * його розривом означало б збрехати про перерву, якої немає.
+ */
+export function normalizeIntervals(
+  intervals: readonly Interval[],
+): Interval[] {
+  const sorted = intervals
+    .filter((i) => i.closesAt > i.opensAt)
+    .sort((a, b) => a.opensAt - b.opensAt);
+
+  const merged: Interval[] = [];
+  for (const next of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && next.opensAt <= last.closesAt) {
+      last.closesAt = Math.max(last.closesAt, next.closesAt);
+    } else {
+      merged.push({ ...next });
+    }
+  }
+  return merged;
+}
+
+/** Межі дня цілком — від найранішого початку до найпізнішого кінця. */
+export function dayBounds(intervals: readonly Interval[]): Interval | null {
+  if (intervals.length === 0) return null;
+  return {
+    opensAt: Math.min(...intervals.map((i) => i.opensAt)),
+    closesAt: Math.max(...intervals.map((i) => i.closesAt)),
+  };
+}
 
 /**
  * Графік у формі, зручній для пошуку: день → його межі.
@@ -68,15 +115,15 @@ export type WorkingDay = {
  * Мапа, а не масив, бо і форма, і перевірка питають одне й те саме — «чи
  * відкрито 2026-08-08?» — і роблять це для кожної клітинки календаря.
  */
-export type Schedule = Map<string, { opensAt: number; closesAt: number }>;
+export type Schedule = Map<string, Interval[]>;
 
 export function toSchedule(days: readonly WorkingDay[]): Schedule {
   return new Map(
     days
-      // Перевернуті межі до мапи не пускаємо: у базі їх боронить констрейнт,
-      // але сюди дані приходять і з форми, де їх ще не перевірено.
-      .filter((d) => d.closesAt > d.opensAt)
-      .map((d) => [d.day, { opensAt: d.opensAt, closesAt: d.closesAt }]),
+      // День без жодного відрізка до мапи не пускаємо: він виглядав би
+      // відкритим, але записатись у нього не було б як.
+      .map((d) => [d.day, normalizeIntervals(d.intervals)] as const)
+      .filter(([, intervals]) => intervals.length > 0),
   );
 }
 
@@ -88,12 +135,21 @@ export function isWorkingDay(schedule: Schedule, day: string): boolean {
   return schedule.has(day);
 }
 
-/** Межі дня, або null для вихідного. */
-export function hoursFor(
-  schedule: Schedule,
-  day: string,
-): { opensAt: number; closesAt: number } | null {
-  return schedule.get(day) ?? null;
+/** Відрізки дня; порожній масив для вихідного. */
+export function intervalsFor(schedule: Schedule, day: string): Interval[] {
+  return schedule.get(day) ?? [];
+}
+
+/**
+ * Межі дня цілком, або null для вихідного.
+ *
+ * Це підпис «10:00–19:00» для клітинки календаря, а не розклад: перерви між
+ * відрізками він не показує. Там, де важливий саме час на запис, беруть
+ * `timesFor`, а не ці межі.
+ */
+export function hoursFor(schedule: Schedule, day: string): Interval | null {
+  const intervals = schedule.get(day);
+  return intervals ? dayBounds(intervals) : null;
 }
 
 /** `10:00–18:00` — підпис у адмінці й у формі. */
@@ -118,15 +174,21 @@ export function timesFor(
   day: string,
   now = new Date(),
 ): number[] {
-  const hours = schedule.get(day);
-  if (!hours) return [];
+  const intervals = schedule.get(day);
+  if (!intervals) return [];
 
   const isToday = day === dateKey(startOfDay(now));
   const passed = isToday ? now.getHours() * 60 + now.getMinutes() : -1;
 
+  // Сітку будуємо по кожному відрізку окремо, а не між крайніми межами дня:
+  // саме тут перерва й відрізає час, коли кабінету немає. Відрізки вже
+  // впорядковані й не перекриваються (`toSchedule`), тож результат виходить
+  // хронологічним і без дублікатів.
   const times: number[] = [];
-  for (let t = hours.opensAt; t < hours.closesAt; t += SLOT_STEP_MIN) {
-    if (t > passed) times.push(t);
+  for (const interval of intervals) {
+    for (let t = interval.opensAt; t < interval.closesAt; t += SLOT_STEP_MIN) {
+      if (t > passed) times.push(t);
+    }
   }
   return times;
 }
@@ -151,13 +213,18 @@ export function isTimeAvailable(
  * Проміжок вважається доступним, якщо він перетинається з робочими годинами
  * бодай на один слот, — саме так його й прочитає людина.
  */
-export function slotsFromHours(hours: {
-  opensAt: number;
-  closesAt: number;
-}): PreferredTime[] {
+export function slotsFromHours(
+  hours: Interval | readonly Interval[],
+): PreferredTime[] {
+  const intervals = Array.isArray(hours) ? hours : [hours as Interval];
   return PREFERRED_TIMES.map((t) => t.id).filter((id) => {
     const bound = SLOT_BOUNDS[id];
-    return hours.opensAt < bound.to && bound.from < hours.closesAt;
+    // Досить одного відрізка, що дістає до проміжку: день з 10:00–12:00 і
+    // 17:00–19:00 — це «ранок і вечір», але не «день», і саме так його й
+    // прочитає людина.
+    return intervals.some(
+      (i) => i.opensAt < bound.to && bound.from < i.closesAt,
+    );
   });
 }
 
