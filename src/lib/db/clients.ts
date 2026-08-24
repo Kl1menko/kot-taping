@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "./client";
 import { normalizePhone } from "@/lib/phone";
-import type { AppointmentRow, ClientRow } from "./types";
+import type { ClientRow } from "./types";
 
 export async function findClientByPhone(
   phone: string,
@@ -136,137 +136,64 @@ export type ClientWithStats = ClientRow & {
 /**
  * Клієнти зі статистикою візитів.
  *
- * Агрегуємо в пам'яті, а не в SQL: клієнтів у студії сотні, не мільйони, а
- * postgrest-агрегати вимагали б окремої view. Якщо база виросте — це перше
- * місце, яке варто переписати на RPC.
+ * Агрегати рахує база (view `client_stats` і `client_cities`, міграція 0014),
+ * а не застосунок. Раніше сторінка тягнула **всю** таблицю візитів — без
+ * ліміту й без фільтра, — щоб згорнути її в чотири числа на клієнта. Клієнти
+ * при цьому були обмежені 500 рядками, а візити ні, тож обсяг ріс назавжди:
+ * кожен проведений візит навіки додавав рядок, який їхав по мережі в Node,
+ * аби стати лічильником.
+ *
+ * Тепер статистика приходить лише для тих клієнтів, що справді на екрані:
+ * `in` по їхніх id замість вибірки всієї таблиці.
  */
 export async function listClientsWithStats(
   query = "",
 ): Promise<{ clients: ClientWithStats[]; hasMore: boolean }> {
-  const VISITS =
-    "client_id, price, starts_at, status, location:locations ( city )";
-
-  /**
-   * Без пошуку обидва запити йдуть одночасно.
-   *
-   * Візити фільтруються через `in` по id клієнтів, тож виглядають залежними —
-   * але коли пошуку немає, ми беремо всіх клієнтів, отже й усі візити: `in`
-   * нічого не відсіює. Чекати на перший запит заради цього означає віддати
-   * ~180 мс на кожне відкриття сторінки (заміряно на цій базі).
-   *
-   * З пошуком залежність справжня: клієнтів одиниці, і тягнути через `in`
-   * дешевше, ніж усю таблицю візитів.
-   */
-  if (!query.trim()) {
-    const [page, visitsResult] = await Promise.all([
-      searchClients(query),
-      db().from("appointments").select(VISITS),
-    ]);
-
-    if (visitsResult.error) {
-      throw new Error(
-        `Не вдалося прочитати візити: ${visitsResult.error.message}`,
-      );
-    }
-
-    return buildStats(page.rows, page.hasMore, visitsResult.data ?? []);
-  }
-
   const { rows: clients, hasMore } = await searchClients(query);
   if (clients.length === 0) return { clients: [], hasMore: false };
 
-  const { data: appointments, error } = await db()
-    .from("appointments")
-    .select(VISITS)
-    .in(
-      "client_id",
-      clients.map((c) => c.id),
+  const ids = clients.map((c) => c.id);
+
+  // Обидва view читаються одночасно: вони не залежать один від одного, а
+  // послідовний виклик додав би зайвий круговий рейс на кожне відкриття.
+  const [statsResult, citiesResult] = await Promise.all([
+    db()
+      .from("client_stats")
+      .select("client_id, visits, total_spent, last_visit, next_visit")
+      .in("client_id", ids),
+    db().from("client_cities").select("client_id, cities").in("client_id", ids),
+  ]);
+
+  if (statsResult.error) {
+    throw new Error(
+      `Не вдалося прочитати статистику: ${statsResult.error.message}`,
     );
-
-  if (error) throw new Error(`Не вдалося прочитати візити: ${error.message}`);
-
-  return buildStats(clients, hasMore, appointments ?? []);
-}
-
-/** Зведення візитів у статистику — спільне для обох гілок вище. */
-function buildStats(
-  clients: ClientRow[],
-  hasMore: boolean,
-  appointments: unknown[],
-): { clients: ClientWithStats[]; hasMore: boolean } {
-  if (clients.length === 0) return { clients: [], hasMore: false };
-
-  // Вкладений джойн збиває виведення типів postgrest до `never`, тож
-  // описуємо форму рядка вручну — так само, як у appointments.ts.
-  type VisitRow = {
-    client_id: string;
-    price: number;
-    starts_at: string;
-    status: AppointmentRow["status"];
-    location: { city: string } | null;
-  };
-  const visits = (appointments ?? []) as unknown as VisitRow[];
-
-  const now = Date.now();
-  const stats = new Map<
-    string,
-    {
-      visits: number;
-      totalSpent: number;
-      lastVisit: string | null;
-      nextVisit: string | null;
-      /** місто → скільки разів; у список віддамо відсортованим за частотою. */
-      cityCounts: Map<string, number>;
-    }
-  >();
-
-  for (const a of visits) {
-    const entry = stats.get(a.client_id) ?? {
-      visits: 0,
-      totalSpent: 0,
-      lastVisit: null,
-      nextVisit: null,
-      cityCounts: new Map<string, number>(),
-    };
-
-    // Скасовані не рахуємо: візит, який не відбувся, нічого не каже про те,
-    // куди людина ходить. Кабінет міг бути видалений — тоді міста немає.
-    const city = a.location?.city;
-    if (city && a.status !== "cancelled") {
-      entry.cityCounts.set(city, (entry.cityCounts.get(city) ?? 0) + 1);
-    }
-
-    if (a.status === "done") {
-      entry.visits += 1;
-      entry.totalSpent += a.price;
-      if (!entry.lastVisit || a.starts_at > entry.lastVisit) {
-        entry.lastVisit = a.starts_at;
-      }
-    }
-
-    if (a.status === "planned" && new Date(a.starts_at).getTime() >= now) {
-      if (!entry.nextVisit || a.starts_at < entry.nextVisit) {
-        entry.nextVisit = a.starts_at;
-      }
-    }
-
-    stats.set(a.client_id, entry);
   }
+  if (citiesResult.error) {
+    throw new Error(
+      `Не вдалося прочитати міста: ${citiesResult.error.message}`,
+    );
+  }
+
+  const stats = new Map(
+    (statsResult.data ?? []).map((row) => [row.client_id, row]),
+  );
+  const cities = new Map(
+    (citiesResult.data ?? []).map((row) => [row.client_id, row.cities ?? []]),
+  );
 
   return {
     clients: clients.map((client) => {
       const entry = stats.get(client.id);
       return {
         ...client,
-        visits: entry?.visits ?? 0,
-        totalSpent: entry?.totalSpent ?? 0,
-        lastVisit: entry?.lastVisit ?? null,
-        nextVisit: entry?.nextVisit ?? null,
-        cities: entry
-          ? [...entry.cityCounts]
-              .sort((a, b) => b[1] - a[1])
-              .map(([city]) => city)
-          : [],
+        // Клієнт без жодного візиту у view не потрапляє — `left join` дає
+        // нульовий рядок лише для `client_stats`, але не для `client_cities`.
+        visits: Number(entry?.visits ?? 0),
+        totalSpent: Number(entry?.total_spent ?? 0),
+        lastVisit: entry?.last_visit ?? null,
+        nextVisit: entry?.next_visit ?? null,
+        cities: cities.get(client.id) ?? [],
       };
     }),
     hasMore,

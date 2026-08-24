@@ -1,6 +1,6 @@
 import { requireSession } from "@/lib/auth/session";
 import { listLocations } from "@/lib/db/appointments";
-import { listWorkingDays } from "@/lib/db/working-days";
+import { listWorkingDaysByLocation } from "@/lib/db/working-days";
 import { dateKey, monthGrid, startOfDay } from "@/lib/calendar";
 import { ScheduleScreen } from "@/components/admin/schedule-screen";
 
@@ -28,24 +28,33 @@ export default async function SchedulePage({
   const { month: monthParam, location } = await searchParams;
   const month = parseMonth(monthParam);
 
-  const locations = await listLocations();
+  // Тягнемо рівно сітку 6×7, а не календарний місяць: клітинки з сусідніх
+  // місяців теж клікабельні, і без їхнього стану вони малювались би
+  // закритими, хоч насправді відкриті.
+  const grid = monthGrid(month);
+  const from = dateKey(grid[0]);
+  const to = dateKey(grid[grid.length - 1]);
+
+  /**
+   * Кабінети й графік — одночасно, хоч другий і потребує id першого.
+   *
+   * Залежність тут удавана: графік фільтрується по `location_id`, а
+   * котрий саме кабінет активний, вирішує slug з URL — і його ми вже маємо.
+   * Тому читаємо графік усіх кабінетів діапазону одним запитом і лишаємо
+   * потрібний у пам'яті. Послідовний виклик коштував би зайвий круговий рейс
+   * на кожне гортання місяця, а кабінетів у студії два.
+   */
+  const [locations, schedules] = await Promise.all([
+    listLocations(),
+    listWorkingDaysByLocation(from, to),
+  ]);
 
   // Невідомий slug у URL ігноруємо — беремо перший кабінет, а не порожній
   // екран: графік без кабінету намалювати неможливо.
   const active =
     locations.find((l) => l.slug === location) ?? locations[0] ?? null;
 
-  // Тягнемо рівно сітку 6×7, а не календарний місяць: клітинки з сусідніх
-  // місяців теж клікабельні, і без їхнього стану вони малювались би
-  // закритими, хоч насправді відкриті.
-  const grid = monthGrid(month);
-  const days = active
-    ? await listWorkingDays(
-        active.id,
-        dateKey(grid[0]),
-        dateKey(grid[grid.length - 1]),
-      )
-    : [];
+  const days = active ? (schedules[active.id] ?? []) : [];
 
   return (
     <ScheduleScreen

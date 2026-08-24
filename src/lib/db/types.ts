@@ -298,7 +298,29 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    /**
+     * View з агрегатами — міграція 0014. Читаються лише на читання, тож
+     * `Insert`/`Update` тут не потрібні.
+     */
+    Views: {
+      client_stats: {
+        Row: {
+          client_id: string;
+          /** `count`/`sum` у Postgres — `bigint`/`numeric`; postgrest віддає їх
+           *  числом, але великі значення прийшли б рядком. Звідси `Number()`
+           *  на межі читання. */
+          visits: number;
+          total_spent: number;
+          last_visit: string | null;
+          next_visit: string | null;
+        };
+        Relationships: [];
+      };
+      client_cities: {
+        Row: { client_id: string; cities: string[] | null };
+        Relationships: [];
+      };
+    };
     Functions: {
       /** Міграція 0004: атомарний лічильник спроб входу. */
       register_login_attempt: {

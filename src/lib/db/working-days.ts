@@ -67,10 +67,6 @@ function toWorkingDay(
 }
 
 /**
- * Графік кабінету в межах [from, to] — обидві межі включно, бо це календарні
- * дати, а не моменти часу: «до 31 серпня» означає саме 31-ше.
- */
-/**
  * Чи це скарга на відсутню таблицю відрізків.
  *
  * Код їде на прод раніше, ніж хтось виконає міграцію 0013, — і в цьому вікні
@@ -90,37 +86,50 @@ function isMissingIntervals(error: { code?: string; message?: string }): boolean
 const DAY_COLUMNS = "day, opens_at, closes_at, note";
 const DAY_COLUMNS_WITH_INTERVALS = `${DAY_COLUMNS}, working_day_intervals ( opens_at, closes_at )`;
 
-export async function listWorkingDays(
-  locationId: string,
+/**
+ * Графік усіх кабінетів у межах [from, to] — обидві межі включно, бо це
+ * календарні дати, а не моменти часу: «до 31 серпня» означає саме 31-ше.
+ *
+ * По всіх кабінетах, а не по одному: сторінка графіка читала спершу кабінети,
+ * а тоді дні активного — два послідовні рейси на кожне гортання місяця, хоч
+ * залежність між ними удавана (який кабінет активний, вирішує slug з URL, а не
+ * відповідь бази). Кабінетів у студії два, тож діапазон по всіх коштує
+ * стільки ж, зате читається одночасно зі списком кабінетів.
+ */
+export async function listWorkingDaysByLocation(
   from: string,
   to: string,
-): Promise<WorkingDay[]> {
-  const query = (columns: string) =>
+): Promise<Record<string, WorkingDay[]>> {
+  const columns = (base: string) => `${base}, location_id`;
+
+  const query = (cols: string) =>
     db()
       .from("working_days")
-      .select(columns)
-      .eq("location_id", locationId)
+      .select(cols)
       .gte("day", from)
       .lte("day", to)
       .order("day");
 
-  let { data, error } = await query(DAY_COLUMNS_WITH_INTERVALS);
+  let { data, error } = await query(columns(DAY_COLUMNS_WITH_INTERVALS));
 
+  // Те саме вікно між деплоєм і міграцією 0013, що й у `listPublicSchedule`.
   if (error && isMissingIntervals(error)) {
-    console.warn(
-      "[schedule] немає таблиці working_day_intervals — виконайте міграцію 0013; " +
-        "поки що день читається як один відрізок.",
-    );
-    ({ data, error } = await query(DAY_COLUMNS));
+    ({ data, error } = await query(columns(DAY_COLUMNS)));
   }
 
   if (error) {
     throw new Error(`Не вдалося прочитати графік: ${error.message}`);
   }
 
-  return ((data ?? []) as unknown as Parameters<typeof toWorkingDay>[0][]).map(
-    toWorkingDay,
-  );
+  const rows = (data ?? []) as unknown as (Parameters<typeof toWorkingDay>[0] & {
+    location_id: string;
+  })[];
+
+  const byLocation: Record<string, WorkingDay[]> = {};
+  for (const row of rows) {
+    (byLocation[row.location_id] ??= []).push(toWorkingDay(row));
+  }
+  return byLocation;
 }
 
 /**
@@ -159,7 +168,7 @@ export async function listPublicSchedule(
 
     let { data, error } = await query(DAY_COLUMNS_WITH_INTERVALS);
 
-    // Те саме вікно між деплоєм і міграцією, що й у `listWorkingDays`. Тут
+    // Те саме вікно між деплоєм і міграцією, що й вище. Тут
     // ціна помилки найвища: без відкату форма запису показала б, що вільних
     // дат немає зовсім.
     if (error && isMissingIntervals(error)) {
