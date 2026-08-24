@@ -11,7 +11,7 @@
 -- від перекриття, а на масиві таку перевірку довелось би писати в застосунку
 -- і сподіватись, що жоден шлях запису її не обійде.
 
-create table working_day_intervals (
+create table if not exists working_day_intervals (
   id             uuid primary key default gen_random_uuid(),
   -- Відрізок без дня сенсу не має, і закриття дня має забирати їх усі.
   working_day_id uuid not null references working_days (id) on delete cascade,
@@ -27,8 +27,17 @@ create table working_day_intervals (
 -- Перенос: кожен наявний день дає свій єдиний відрізок. Робимо це до того, як
 -- колонки дня стануть похідними, — інакше графік, уже заведений майстринею,
 -- зник би з форми запису.
+--
+-- `not exists` робить крок повторюваним: перший запуск цієї міграції впав на
+-- неіснуючому `timerange` уже після створення таблиці, тож у базі лишились і
+-- таблиця, і перенесені рядки. Без цієї умови повтор задублював би кожен день
+-- другим таким самим відрізком — і впав би вже на `exclude`.
 insert into working_day_intervals (working_day_id, opens_at, closes_at)
-select id, opens_at, closes_at from working_days;
+select d.id, d.opens_at, d.closes_at
+  from working_days d
+ where not exists (
+   select 1 from working_day_intervals i where i.working_day_id = d.id
+ );
 
 -- Відрізки одного дня не перекриваються: 10:00–14:00 і 13:00–18:00 — це той
 -- самий 13:00 у двох відрізках, і сітка часу показала б його двічі.
@@ -45,6 +54,11 @@ create or replace function time_to_minutes(t time) returns numeric as $$
   select extract(epoch from t) / 60;
 $$ language sql immutable strict;
 
+-- `drop` перед `add`: у Postgres немає `add constraint if not exists`, а
+-- міграцію треба вміти дограти після падіння посередині.
+alter table working_day_intervals
+  drop constraint if exists working_day_intervals_no_overlap;
+
 alter table working_day_intervals
   add constraint working_day_intervals_no_overlap
   exclude using gist (
@@ -59,7 +73,7 @@ alter table working_day_intervals
   );
 
 -- Форма питає відрізки завжди разом із днем.
-create index working_day_intervals_day_idx
+create index if not exists working_day_intervals_day_idx
   on working_day_intervals (working_day_id, opens_at);
 
 alter table working_day_intervals enable row level security;
@@ -67,6 +81,7 @@ alter table working_day_intervals enable row level security;
 -- service-role — і адмінка, і публічна форма.
 
 -- Дзвіночок адмінці: змінений з іншого пристрою графік має підтягнутись сам.
+drop trigger if exists working_day_intervals_ping on working_day_intervals;
 create trigger working_day_intervals_ping
   after insert or update or delete on working_day_intervals
   for each statement execute function notify_change();
@@ -99,6 +114,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists working_day_intervals_sync on working_day_intervals;
 create trigger working_day_intervals_sync
   after insert or update or delete on working_day_intervals
   for each row execute function sync_working_day_hours();

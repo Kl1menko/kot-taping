@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/admin/login/actions";
+import { ADMIN_SECTIONS, isActiveSection } from "@/lib/admin-nav";
 
-const LINKS = [
-  { href: "/admin", label: "Сьогодні" },
-  { href: "/admin/requests", label: "Заявки" },
-  { href: "/admin/calendar", label: "Календар" },
-  { href: "/admin/schedule", label: "Графік" },
-  { href: "/admin/kits", label: "Набори" },
-  { href: "/admin/clients", label: "Клієнти" },
-  { href: "/admin/services", label: "Прайс" },
-  { href: "/admin/analytics", label: "Аналітика" },
-];
+/**
+ * Список спільний із таб-баром (`@/lib/admin-nav`), і це важливо: доти, доки
+ * копій було дві, вони встигли розійтись — той самий `/admin/calendar` звався
+ * тут «Календар», а внизу «Записи», і порядок розділів не збігався. Людина
+ * вчиться розташуванню пунктів, а не читає їх щоразу; коли воно міняється
+ * разом із шириною екрана, вчитись нема чому.
+ *
+ * На десктопі показуємо всі розділи: поділ на «щоденне» й «Ще» існує лише
+ * тому, що в рядок телефона не влазить більше п'яти.
+ */
+const LINKS = ADMIN_SECTIONS;
 
 export function AdminNav() {
   const pathname = usePathname();
@@ -24,10 +26,7 @@ export function AdminNav() {
           має зсувати сторінку вбік. */}
       <nav className="-mx-1 flex flex-1 gap-1 overflow-x-auto px-1">
         {LINKS.map((link) => {
-          const active =
-            link.href === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(link.href);
+          const active = isActiveSection(link.href, pathname);
 
           return (
             <Link

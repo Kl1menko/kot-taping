@@ -4,6 +4,10 @@ import { listAppointments, listLocations } from "@/lib/db/appointments";
 import { loadedRange, startOfDay } from "@/lib/calendar";
 import { CalendarScreen } from "@/components/admin/calendar-screen";
 
+// Назва збігається з підписом у меню (`@/lib/admin-nav`): вкладка браузера й
+// пункт навігації мають називати розділ однаково.
+export const metadata = { title: "Записи" };
+
 export const dynamic = "force-dynamic";
 
 /** `2026-08-08` з URL, або сьогодні. Некоректне значення мовчки ігноруємо. */

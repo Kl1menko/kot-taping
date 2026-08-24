@@ -67,7 +67,23 @@ export function Sheet({
           вміст між ними. */}
       <div className="flex h-full flex-col sm:max-h-[88dvh]">
         <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-canvas px-5 pb-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4">
-          <h2 className="text-[15px] text-ink-muted">{title}</h2>
+          {/*
+            `autoFocus` на заголовку, а не на кнопці закриття.
+
+            `showModal()` сам фокусує перший фокусований елемент, і ним був
+            хрестик. Відкрите з тапу вікно браузер на телефоні все одно
+            зараховує як фокус із клавіатури, тож хрестик зустрічав чорною
+            обвідкою — вона читається як «вибрано», хоч ніхто нічого не
+            вибирав.
+            
+            Прибирати обвідку не можна: вона потрібна тим, хто йде з
+            клавіатури. Тому фокус переїжджає на заголовок — читачі з екрана
+            заразом одразу чують, що саме відкрилось, а `tabIndex={-1}` лишає
+            його поза обходом по Tab.
+          */}
+          <h2 autoFocus tabIndex={-1} className="text-[15px] text-ink-muted outline-none">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
