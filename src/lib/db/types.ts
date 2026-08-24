@@ -57,8 +57,15 @@ export type WorkingDayRow = {
   location_id: string;
   /** `2026-08-08` — колонка `date`, без часу й зони. */
   day: string;
-  /** Відкриті проміжки; дзеркалять PREFERRED_TIMES з @/lib/intake. */
-  slots: PreferredTime[];
+  /**
+   * Межі робочого дня — колонка `time`, тобто рядок «10:00:00».
+   *
+   * Проміжки ранок/день/вечір із анкети тут НЕ зберігаються: вони рахуються
+   * з цих меж (`slotsFromHours` у @/lib/schedule). Друга колонка з ними була б
+   * другим джерелом правди, яке рано чи пізно розійшлося б із розкладом.
+   */
+  opens_at: string;
+  closes_at: string;
   /** Нотатка майстрині для себе. Клієнтка її не бачить. */
   note: string | null;
   created_at: string;
@@ -100,8 +107,13 @@ export type RequestRow = {
   contact_channel: ContactChannel;
   /** Нік без «@»; null для каналу 'phone'. */
   contact_handle: string | null;
-  /** Орієнтир пацієнта. Точний час ставить майстриня в календарі. */
+  /**
+   * Проміжок дня — орієнтир для фільтра в списку заявок. Рахується з
+   * `preferred_at`, а не задається окремо (див. `slotForTime`).
+   */
   preferred_time: PreferredTime | null;
+  /** Точна година з форми, «17:30». Міграція 0011. */
+  preferred_at: string | null;
   tape_color: string | null;
   height_cm: number | null;
   /** Вільний текст: об'єми пишуть як завгодно, читає їх людина. */
@@ -205,6 +217,25 @@ export type PaymentRow = {
   updated_at: string;
 };
 
+/**
+ * Підписка пристрою на пуш-сповіщення — міграція 0010.
+ *
+ * Рядок = один пристрій. Майстриня може поставити адмінку і на телефон, і на
+ * планшет, тож розсилка йде по всіх рядках.
+ */
+export type PushSubscriptionRow = {
+  id: string;
+  /** Ендпойнт push-сервісу; він же ідентифікує пристрій. */
+  endpoint: string;
+  /** Ключі шифрування payload — без них вміст не зашифрувати. */
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  /** Остання вдала доставка — за нею видно мертві підписки. */
+  last_ok_at: string | null;
+  created_at: string;
+};
+
 /** Лічильник спроб входу — міграція 0004. Рядок один на ключ. */
 export type LoginAttemptRow = {
   key: string;
@@ -229,6 +260,7 @@ export type Database = {
       kits: Table<KitRow>;
       kit_orders: Table<KitOrderRow>;
       payments: Table<PaymentRow>;
+      push_subscriptions: Table<PushSubscriptionRow>;
       /**
        * Ключ тут `key`, а не `id`, тож шаблон `Table<>` не підходить.
        * Пишемо напряму — до таблиці ми і так ходимо лише через RPC.

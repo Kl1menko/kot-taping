@@ -269,13 +269,18 @@ function RequestDetails({
   const service = services.find((s) => s.slug === request.service_slug);
   const flags = contraindicationLabels(request.contraindications);
   const contact = contactLink(request);
-  const timeLabel = request.preferred_time
-    ? preferredTimeLabel(request.preferred_time)
-    : null;
+  // Точна година, яку обрала клієнтка (міграція 0011). Старі заявки її не
+  // мають — там лишається проміжок, і показуємо його.
+  const exactTime = request.preferred_at?.slice(0, 5) ?? null;
+  const timeLabel =
+    exactTime ??
+    (request.preferred_time ? preferredTimeLabel(request.preferred_time) : null);
 
-  // Бажана дата клієнтки — заготовка; час майстер обирає сама.
+  // Заготовка для форми запису: беремо саме ту годину, яку обрала клієнтка,
+  // а не 10:00 навмання — тепер вона в заявці є, і переставляти її вручну
+  // означало б ігнорувати те, про що клієнтка щойно попросила.
   const suggested = request.preferred_date
-    ? new Date(`${request.preferred_date}T10:00`)
+    ? new Date(`${request.preferred_date}T${exactTime ?? "10:00"}`)
     : new Date();
 
   const decline = () => {

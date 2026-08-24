@@ -3,93 +3,160 @@ import { test } from "node:test";
 
 import {
   countInMonth,
+  formatTime,
+  hoursLabel,
   initialMonth,
   isBookable,
   isDateAvailable,
-  isSlotOpen,
+  isTimeAvailable,
   isWorkingDay,
-  normalizeSlots,
-  slotsFor,
+  parseTime,
+  slotForTime,
+  slotsFromHours,
+  timesFor,
   toSchedule,
   upcomingDays,
 } from "./schedule.ts";
 
-const AUGUST_8 = new Date(2026, 7, 8);
+/** 8 серпня 2026, 08:00 — до початку будь-якого робочого дня. */
+const MORNING = new Date(2026, 7, 8, 8, 0);
 
-function schedule(...days: [string, string[]][]) {
+function schedule(...days: [string, string, string][]) {
   return toSchedule(
-    days.map(([day, slots]) => ({ day, slots: normalizeSlots(slots) })),
+    days.map(([day, opens, closes]) => ({
+      day,
+      opensAt: parseTime(opens)!,
+      closesAt: parseTime(closes)!,
+    })),
   );
 }
 
+test("час розбирається й друкується в один бік", () => {
+  assert.equal(parseTime("10:30"), 630);
+  assert.equal(parseTime("09:00"), 540);
+  assert.equal(parseTime("9:00"), 540);
+  // Postgres віддає `time` з секундами — вони не мають заважати.
+  assert.equal(parseTime("10:00:00"), 600);
+  assert.equal(formatTime(630), "10:30");
+  assert.equal(formatTime(540), "09:00");
+});
+
+test("сміття замість часу не стає нулем", () => {
+  // Мовчазний 0 тут означав би «опівночі» — робочий день з 00:00.
+  assert.equal(parseTime(""), null);
+  assert.equal(parseTime("обід"), null);
+  assert.equal(parseTime("25:00"), null);
+  assert.equal(parseTime("10:99"), null);
+});
+
 test("день поза графіком неробочий", () => {
-  // Графік — білий список: «нічого не налаштовано» = «нічого не відкрито».
-  const s = schedule(["2026-08-10", ["morning"]]);
+  const s = schedule(["2026-08-10", "10:00", "18:00"]);
 
   assert.equal(isWorkingDay(s, "2026-08-10"), true);
   assert.equal(isWorkingDay(s, "2026-08-11"), false);
   assert.equal(isWorkingDay(toSchedule([]), "2026-08-10"), false);
 });
 
-test("порожній список проміжків не робить день робочим", () => {
-  const s = schedule(["2026-08-10", []]);
+test("перевернуті межі до графіка не потрапляють", () => {
+  // У базі це боронить констрейнт, але сюди дані йдуть і з форми.
+  const s = toSchedule([{ day: "2026-08-10", opensAt: 1080, closesAt: 600 }]);
   assert.equal(isWorkingDay(s, "2026-08-10"), false);
 });
 
-test("невідомі проміжки й дублікати відсіюються, порядок доби зберігається", () => {
-  assert.deepEqual(normalizeSlots(["evening", "morning"]), ["morning", "evening"]);
-  assert.deepEqual(normalizeSlots(["morning", "morning"]), ["morning"]);
-  assert.deepEqual(normalizeSlots(["night", "обід"]), []);
+test("сітка часу йде з кроком 30 хв і не включає час закриття", () => {
+  // Сеанс, що починається о закритті, — це не робочий час.
+  const s = schedule(["2026-08-10", "10:00", "12:00"]);
+  assert.deepEqual(
+    timesFor(s, "2026-08-10", MORNING).map(formatTime),
+    ["10:00", "10:30", "11:00", "11:30"],
+  );
 });
 
-test("відкритий лише той проміжок, який задала майстриня", () => {
-  const s = schedule(["2026-08-10", ["morning", "evening"]]);
+test("сьогодні години, що минули, вже не пропонуються", () => {
+  const s = schedule(["2026-08-08", "09:00", "13:00"]);
+  const atNoon = new Date(2026, 7, 8, 12, 10);
 
-  assert.equal(isSlotOpen(s, "2026-08-10", "morning"), true);
-  assert.equal(isSlotOpen(s, "2026-08-10", "day"), false);
-  assert.equal(isSlotOpen(s, "2026-08-11", "morning"), false);
-  assert.deepEqual(slotsFor(s, "2026-08-10"), ["morning", "evening"]);
-  assert.deepEqual(slotsFor(s, "2026-08-11"), []);
+  assert.deepEqual(timesFor(s, "2026-08-08", atNoon).map(formatTime), ["12:30"]);
+  // На завтрашній день поточна година не впливає.
+  const tomorrow = schedule(["2026-08-09", "09:00", "10:30"]);
+  assert.deepEqual(
+    timesFor(tomorrow, "2026-08-09", atNoon).map(formatTime),
+    ["09:00", "09:30", "10:00"],
+  );
+});
+
+test("день, у якому години вже минули, недоступний", () => {
+  // Інакше форма пропонувала б дату, на яку не лишилось жодного часу.
+  const s = schedule(["2026-08-08", "09:00", "12:00"]);
+  const evening = new Date(2026, 7, 8, 19, 0);
+
+  assert.equal(isDateAvailable(s, "2026-08-08", evening), false);
+  assert.equal(isDateAvailable(s, "2026-08-08", MORNING), true);
+});
+
+test("перевірка часу збігається з тим, що показує форма", () => {
+  // Розійдись вони — Server Action відкидав би час, який сам показав.
+  const s = schedule(["2026-08-10", "10:00", "12:00"]);
+
+  assert.equal(isTimeAvailable(s, "2026-08-10", 600, MORNING), true);
+  // Не по сітці.
+  assert.equal(isTimeAvailable(s, "2026-08-10", 615, MORNING), false);
+  // Рівно час закриття.
+  assert.equal(isTimeAvailable(s, "2026-08-10", 720, MORNING), false);
+  // Закритий день.
+  assert.equal(isTimeAvailable(s, "2026-08-11", 600, MORNING), false);
+});
+
+test("проміжки рахуються з годин, а не зберігаються окремо", () => {
+  // Саме тому вони не можуть розійтися з розкладом.
+  assert.deepEqual(slotsFromHours({ opensAt: 600, closesAt: 1080 }), [
+    "morning",
+    "day",
+    "evening",
+  ]);
+  // 10:00–12:00 — лише ранок.
+  assert.deepEqual(slotsFromHours({ opensAt: 600, closesAt: 720 }), ["morning"]);
+  // 17:00–19:00 — лише вечір.
+  assert.deepEqual(slotsFromHours({ opensAt: 1020, closesAt: 1140 }), ["evening"]);
+  // 11:00–13:00 зачіпає обидва.
+  assert.deepEqual(slotsFromHours({ opensAt: 660, closesAt: 780 }), [
+    "morning",
+    "day",
+  ]);
+});
+
+test("час лягає у свій проміжок", () => {
+  assert.equal(slotForTime(parseTime("10:00")!), "morning");
+  assert.equal(slotForTime(parseTime("12:00")!), "day");
+  assert.equal(slotForTime(parseTime("15:30")!), "day");
+  assert.equal(slotForTime(parseTime("16:00")!), "evening");
+  // Поза межами анкети — проміжку немає, і це не помилка.
+  assert.equal(slotForTime(parseTime("21:00")!), null);
 });
 
 test("сьогодні ще можна записатись, вчора вже ні", () => {
-  // Заявка — намір, а не бронювання: зранку на сьогоднішній вечір це нормально.
-  assert.equal(isBookable("2026-08-08", AUGUST_8), true);
-  assert.equal(isBookable("2026-08-09", AUGUST_8), true);
-  assert.equal(isBookable("2026-08-07", AUGUST_8), false);
-});
-
-test("перевірка дати збігається з тим, що показує форма", () => {
-  // Розійдись ці дві умови — Server Action відкидав би день, який сам показав.
-  const s = schedule(["2026-08-07", ["day"]], ["2026-08-10", ["day"]]);
-
-  assert.equal(isDateAvailable(s, "2026-08-10", AUGUST_8), true);
-  // Відкритий, але в минулому.
-  assert.equal(isDateAvailable(s, "2026-08-07", AUGUST_8), false);
-  // У майбутньому, але закритий.
-  assert.equal(isDateAvailable(s, "2026-08-11", AUGUST_8), false);
+  assert.equal(isBookable("2026-08-08", MORNING), true);
+  assert.equal(isBookable("2026-08-09", MORNING), true);
+  assert.equal(isBookable("2026-08-07", MORNING), false);
 });
 
 test("найближчі дні — хронологічно й без минулого", () => {
   const s = schedule(
-    ["2026-08-20", ["day"]],
-    ["2026-08-01", ["day"]],
-    ["2026-08-10", ["day"]],
+    ["2026-08-20", "10:00", "18:00"],
+    ["2026-08-01", "10:00", "18:00"],
+    ["2026-08-10", "10:00", "18:00"],
   );
 
-  assert.deepEqual(upcomingDays(s, AUGUST_8), ["2026-08-10", "2026-08-20"]);
-  assert.deepEqual(upcomingDays(s, AUGUST_8, 1), ["2026-08-10"]);
+  assert.deepEqual(upcomingDays(s, MORNING), ["2026-08-10", "2026-08-20"]);
+  assert.deepEqual(upcomingDays(s, MORNING, 1), ["2026-08-10"]);
 });
 
 test("форма відкривається на місяці, де дні справді є", () => {
-  // Кінець місяця без відкритих днів: почни календар із поточного — клієнтка
-  // побачила б порожню сітку, не здогадавшись гортати далі.
-  const s = schedule(["2026-10-05", ["day"]]);
-  assert.equal(initialMonth(s, AUGUST_8).getTime(), new Date(2026, 9, 1).getTime());
+  const s = schedule(["2026-10-05", "10:00", "18:00"]);
+  assert.equal(initialMonth(s, MORNING).getTime(), new Date(2026, 9, 1).getTime());
 
-  // Графіку немає — лишаємось у поточному місяці.
   assert.equal(
-    initialMonth(toSchedule([]), AUGUST_8).getTime(),
+    initialMonth(toSchedule([]), MORNING).getTime(),
     new Date(2026, 7, 1).getTime(),
   );
 });
@@ -97,11 +164,15 @@ test("форма відкривається на місяці, де дні сп�
 test("у місяці рахуються лише його власні дні", () => {
   // Сітка 6×7 захоплює сусідні місяці — вони не мають потрапляти в підпис.
   const s = schedule(
-    ["2026-07-31", ["day"]],
-    ["2026-08-01", ["day"]],
-    ["2026-08-31", ["day"]],
-    ["2026-09-01", ["day"]],
+    ["2026-07-31", "10:00", "18:00"],
+    ["2026-08-01", "10:00", "18:00"],
+    ["2026-08-31", "10:00", "18:00"],
+    ["2026-09-01", "10:00", "18:00"],
   );
 
   assert.equal(countInMonth(s, new Date(2026, 7, 1)), 2);
+});
+
+test("підпис годин читається як діапазон", () => {
+  assert.equal(hoursLabel({ opensAt: 600, closesAt: 1080 }), "10:00–18:00");
 });

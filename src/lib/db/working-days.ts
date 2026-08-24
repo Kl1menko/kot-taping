@@ -2,24 +2,42 @@ import "server-only";
 
 import { db } from "./client";
 import { dateKey, startOfDay } from "@/lib/calendar";
-import { normalizeSlots, toSchedule, type Schedule, type WorkingDay } from "@/lib/schedule";
+import {
+  formatTime,
+  parseTime,
+  toSchedule,
+  type Schedule,
+  type WorkingDay,
+} from "@/lib/schedule";
 import type { WorkingDayRow } from "./types";
 
 /**
  * Робочий графік — читання для адмінки й для форми запису.
  *
  * Дати тут ходять рядками `2026-08-08`, а не `Date`: у Postgres колонка має
- * тип `date` (без часу й зони), у формі те саме приходить з `<input
- * type="date">`, і будь-яке перетворення на момент часу лише додало б шанс
- * зсунути день через зону.
+ * тип `date` (без часу й зони), у формі те саме приходить з календаря, і
+ * будь-яке перетворення на момент часу лише додало б шанс зсунути день через
+ * зону.
+ *
+ * Години, навпаки, одразу розбираються в хвилини від опівночі: Postgres
+ * віддає `time` рядком «10:00:00», і робити цей розбір у кожному місці, що
+ * читає графік, означало б чекати першої ж розбіжності.
  */
 
-function toWorkingDay(row: Pick<WorkingDayRow, "day" | "slots" | "note">): WorkingDay {
+/** Хвилини від опівночі — за замовчуванням робоче вікно студії. */
+const FALLBACK_OPENS = 9 * 60;
+const FALLBACK_CLOSES = 20 * 60;
+
+function toWorkingDay(
+  row: Pick<WorkingDayRow, "day" | "opens_at" | "closes_at" | "note">,
+): WorkingDay {
+  // Відкат на робоче вікно, а не пропуск дня: колонки `not null`, тож сюди
+  // можна дійти лише з геть несподіваним форматом — і тоді день краще
+  // показати з типовими годинами, ніж мовчки прибрати з графіка.
   return {
     day: row.day,
-    // Нормалізуємо на читанні: check-констрейнт боронить майбутні вставки, а
-    // старі рядки могли лягти до нього. Порядок доби теж наводимо тут.
-    slots: normalizeSlots(row.slots),
+    opensAt: parseTime(row.opens_at) ?? FALLBACK_OPENS,
+    closesAt: parseTime(row.closes_at) ?? FALLBACK_CLOSES,
     note: row.note,
   };
 }
@@ -35,7 +53,7 @@ export async function listWorkingDays(
 ): Promise<WorkingDay[]> {
   const { data, error } = await db()
     .from("working_days")
-    .select("day, slots, note")
+    .select("day, opens_at, closes_at, note")
     .eq("location_id", locationId)
     .gte("day", from)
     .lte("day", to)
@@ -75,7 +93,7 @@ export async function listPublicSchedule(
   try {
     const { data, error } = await db()
       .from("working_days")
-      .select("day, slots, note, location:locations ( slug, is_active )")
+      .select("day, opens_at, closes_at, note, location:locations ( slug, is_active )")
       .gte("day", dateKey(today))
       .lte("day", dateKey(until))
       .order("day");
@@ -84,7 +102,7 @@ export async function listPublicSchedule(
 
     const rows = (data ?? []) as unknown as (Pick<
       WorkingDayRow,
-      "day" | "slots" | "note"
+      "day" | "opens_at" | "closes_at" | "note"
     > & { location: { slug: string; is_active: boolean } | null })[];
 
     // Групуємо по кабінету, деактивовані пропускаючи: кабінет прибрали з
@@ -92,11 +110,13 @@ export async function listPublicSchedule(
     const byLocation: Record<string, WorkingDay[]> = {};
     for (const row of rows) {
       if (!row.location?.is_active) continue;
+      const day = toWorkingDay(row);
       // Нотатка — для майстрині, і на клієнт їй не треба: вона нічого там не
       // малює, зате поїхала б у HTML кожної сторінки.
       (byLocation[row.location.slug] ??= []).push({
-        day: row.day,
-        slots: normalizeSlots(row.slots),
+        day: day.day,
+        opensAt: day.opensAt,
+        closesAt: day.closesAt,
       });
     }
 
@@ -116,7 +136,7 @@ export async function listPublicSchedule(
  * Те саме, але вже як `Schedule` — для Server Action, який звіряє заявку.
  *
  * Живе поруч, а не в екшені, щоб перевірка й показ спиралися на один запит і
- * одні правила: розійдись вони, форма показувала б день, який перевірка потім
+ * одні правила: розійдись вони, форма показувала б час, який перевірка потім
  * відкидає.
  */
 export async function readSchedule(
@@ -125,4 +145,9 @@ export async function readSchedule(
   const byLocation = await listPublicSchedule();
   const days = byLocation[locationSlug];
   return days ? toSchedule(days) : null;
+}
+
+/** Хвилини від опівночі → `10:00` для колонки `time` у Postgres. */
+export function toTimeColumn(minutes: number): string {
+  return formatTime(minutes);
 }

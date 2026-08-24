@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db/client";
 import { escapeHtml, sendTelegram } from "@/lib/notify";
+import { sendPush } from "@/lib/push";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import {
   isContactChannel,
@@ -206,24 +207,36 @@ export async function submitKitOrder(
     ? `<b>Зв'язок:</b> ${channel === "instagram" ? "Instagram" : "Telegram"}, @${escapeHtml(handle)}`
     : "<b>Зв'язок:</b> телефоном";
 
-  await sendTelegram(
-    [
-      "<b>Замовлення набору</b>",
-      "",
-      `<b>Набір:</b> ${escapeHtml(kit!.title)}`,
-      `<b>Ім'я:</b> ${escapeHtml(name)}`,
-      `<b>Телефон:</b> ${escapeHtml(normalized)}`,
-      contactLine,
-      tapeColor ? `<b>Колір:</b> ${escapeHtml(tapeColor)}` : "",
-      measurements ? `<b>Заміри:</b> ${escapeHtml(measurements)}` : "",
-      // Країна попереду міста: саме вона вирішує вартість доставки.
-      `<b>Доставка:</b> ${escapeHtml(country)}, ${escapeHtml(city)}`,
-      isWorldwide(country) ? "⚠️ Доставка за кордон — порахувати вартість" : "",
-      note ? `<b>Коментар:</b> ${escapeHtml(note)}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  );
+  // Два канали паралельно — як і для заявки з сайту: Telegram веде в чат,
+  // пуш — одразу в розділ наборів.
+  await Promise.all([
+    sendTelegram(
+      [
+        "<b>Замовлення набору</b>",
+        "",
+        `<b>Набір:</b> ${escapeHtml(kit!.title)}`,
+        `<b>Ім'я:</b> ${escapeHtml(name)}`,
+        `<b>Телефон:</b> ${escapeHtml(normalized)}`,
+        contactLine,
+        tapeColor ? `<b>Колір:</b> ${escapeHtml(tapeColor)}` : "",
+        measurements ? `<b>Заміри:</b> ${escapeHtml(measurements)}` : "",
+        // Країна попереду міста: саме вона вирішує вартість доставки.
+        `<b>Доставка:</b> ${escapeHtml(country)}, ${escapeHtml(city)}`,
+        isWorldwide(country) ? "⚠️ Доставка за кордон — порахувати вартість" : "",
+        note ? `<b>Коментар:</b> ${escapeHtml(note)}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    ),
+    sendPush({
+      title: isWorldwide(country)
+        ? "⚠️ Замовлення за кордон"
+        : "Замовлення набору",
+      body: `${name}, ${kit!.title} — ${country}, ${city}`,
+      url: "/admin/kits",
+      tag: "kit-order",
+    }),
+  ]);
 
   return {
     status: "success",

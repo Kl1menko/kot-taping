@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { normalizeSlots } from "@/lib/schedule";
+import { formatTime, parseTime } from "@/lib/schedule";
 
 /**
  * Редагування робочого графіка.
@@ -14,6 +14,10 @@ import { normalizeSlots } from "@/lib/schedule";
  */
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Типові години, якими відкривається день одним тапом. */
+const DEFAULT_OPENS = 10 * 60;
+const DEFAULT_CLOSES = 18 * 60;
 
 /** Кабінет має існувати: id приходить з клієнта, тож звіряємо з базою. */
 async function assertLocation(locationId: string): Promise<void> {
@@ -34,7 +38,7 @@ function revalidate() {
 }
 
 /**
- * Перемикає день: закритий відкриває, відкритий закриває.
+ * Перемикає день: закритий відкриває з типовими годинами, відкритий закриває.
  *
  * Закриття — це видалення рядка, а не прапорець `is_open`. Графік визначений
  * як білий список (див. міграцію 0008), і другий спосіб сказати «закрито»
@@ -44,8 +48,6 @@ function revalidate() {
 export async function toggleWorkingDay(
   locationId: string,
   day: string,
-  /** Проміжки для дня, що відкривається. Порожньо — усі три. */
-  slots: string[] = [],
 ): Promise<void> {
   await requireSession();
 
@@ -71,13 +73,11 @@ export async function toggleWorkingDay(
 
     if (error) throw new Error(`Не вдалося закрити день: ${error.message}`);
   } else {
-    const normalized = normalizeSlots(slots);
     const { error } = await db().from("working_days").insert({
       location_id: locationId,
       day,
-      // Порожньо — відкриваємо весь день: перемикач має давати робочий день
-      // одним тапом, а звужувати проміжки майстриня буде окремо.
-      slots: normalized.length > 0 ? normalized : normalizeSlots(["morning", "day", "evening"]),
+      opens_at: formatTime(DEFAULT_OPENS),
+      closes_at: formatTime(DEFAULT_CLOSES),
     });
 
     if (error) throw new Error(`Не вдалося відкрити день: ${error.message}`);
@@ -87,47 +87,54 @@ export async function toggleWorkingDay(
 }
 
 /**
- * Задає проміжки вже відкритого дня.
+ * Задає години вже відкритого дня.
  *
- * Знявши останній проміжок, день закриваємо: «робочий день, у який не можна
- * записатись» — стан, якого в графіку бути не має.
+ * Перевірку меж робимо тут, а не покладаємось на констрейнт: помилка бази
+ * прилетіла б майстрині як «violates check constraint», а не як зрозуміле
+ * «кінець має бути пізніше початку».
  */
-export async function setDaySlots(
+export async function setDayHours(
   locationId: string,
   day: string,
-  slots: string[],
-): Promise<void> {
+  opensAt: string,
+  closesAt: string,
+): Promise<{ ok: boolean; message?: string }> {
   await requireSession();
 
   if (!DAY_RE.test(day)) throw new Error("Некоректна дата.");
-  await assertLocation(locationId);
 
-  const normalized = normalizeSlots(slots);
+  const opens = parseTime(opensAt);
+  const closes = parseTime(closesAt);
 
-  if (normalized.length === 0) {
-    const { error } = await db()
-      .from("working_days")
-      .delete()
-      .eq("location_id", locationId)
-      .eq("day", day);
-
-    if (error) throw new Error(`Не вдалося закрити день: ${error.message}`);
-    revalidate();
-    return;
+  if (opens === null || closes === null) {
+    return { ok: false, message: "Час у форматі 10:00." };
   }
+  if (closes <= opens) {
+    return { ok: false, message: "Кінець має бути пізніше початку." };
+  }
+
+  await assertLocation(locationId);
 
   // Upsert по (location_id, day): у таблиці на цю пару є unique, тож день
   // або оновиться, або з'явиться — без гонки між читанням і записом.
   const { error } = await db()
     .from("working_days")
     .upsert(
-      { location_id: locationId, day, slots: normalized },
+      {
+        location_id: locationId,
+        day,
+        opens_at: formatTime(opens),
+        closes_at: formatTime(closes),
+      },
       { onConflict: "location_id,day" },
     );
 
-  if (error) throw new Error(`Не вдалося зберегти проміжки: ${error.message}`);
+  if (error) {
+    return { ok: false, message: `Не вдалося зберегти: ${error.message}` };
+  }
 
   revalidate();
+  return { ok: true };
 }
 
 /**
@@ -138,6 +145,8 @@ export async function bulkSetWorkingDays(
   locationId: string,
   days: string[],
   open: boolean,
+  /** Години для днів, що відкриваються. Порожньо — типові. */
+  hours?: { opensAt: string; closesAt: string },
 ): Promise<void> {
   await requireSession();
 
@@ -147,13 +156,22 @@ export async function bulkSetWorkingDays(
   await assertLocation(locationId);
 
   if (open) {
-    const all = normalizeSlots(["morning", "day", "evening"]);
+    const opens = hours ? parseTime(hours.opensAt) : null;
+    const closes = hours ? parseTime(hours.closesAt) : null;
+    const useOpens = opens !== null && closes !== null && closes > opens ? opens : DEFAULT_OPENS;
+    const useCloses = opens !== null && closes !== null && closes > opens ? closes : DEFAULT_CLOSES;
+
     const { error } = await db()
       .from("working_days")
       .upsert(
-        valid.map((day) => ({ location_id: locationId, day, slots: all })),
-        // ignoreDuplicates: уже відкритий день лишається як є, зі своїми
-        // проміжками. Інакше «відкрити місяць» тихо скидало б звужені дні.
+        valid.map((day) => ({
+          location_id: locationId,
+          day,
+          opens_at: formatTime(useOpens),
+          closes_at: formatTime(useCloses),
+        })),
+        // ignoreDuplicates: уже відкритий день лишається зі своїми годинами.
+        // Інакше «відкрити місяць» тихо скидало б удень налаштовані винятки.
         { onConflict: "location_id,day", ignoreDuplicates: true },
       );
 

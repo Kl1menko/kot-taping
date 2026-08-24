@@ -9,15 +9,16 @@ import { SocialIcon } from "./social-icons";
 import { INPUT_CLS } from "@/lib/form";
 import { DatePicker } from "./date-picker";
 import {
-  isSlotOpen,
-  slotsFor,
+  formatTime,
+  hoursFor,
+  hoursLabel,
+  timesFor,
   toSchedule,
   type WorkingDay,
 } from "@/lib/schedule";
 import {
   CONTACT_CHANNELS,
   CONTRAINDICATIONS,
-  PREFERRED_TIMES,
   TAPE_COLORS,
   isContactChannel,
   needsHandle,
@@ -216,12 +217,20 @@ export function BookingForm({
     [schedule, location],
   );
 
-  // Дата зі стану, а не з DOM: від неї залежать доступні проміжки нижче.
+  // Дата зі стану, а не з DOM: від неї залежить сітка часу нижче.
   const [date, setDate] = useState(sent?.date ?? "");
 
-  // Проміжки саме цього дня. День закритий або не обраний — показуємо всі
-  // три погашеними, щоб поле не зникало й не смикало розкладку.
-  const openSlots = slotsFor(daysForLocation, date);
+  // Час, на який справді можна записатись цього дня. Рахується з робочих
+  // годин, тож розійтися з розкладом майстрині не може.
+  const times = useMemo(
+    () => timesFor(daysForLocation, date),
+    [daysForLocation, date],
+  );
+
+  const dayHours = hoursFor(daysForLocation, date);
+
+  // Обраний час — теж у стані: поле приховане, а плитки малює React.
+  const [time, setTime] = useState(sent?.time ?? "");
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -379,8 +388,9 @@ export function BookingForm({
           onChange={(e) => {
             setLocation(e.target.value);
             // Дата зі старого кабінету може бути закрита в новому — скидаємо
-            // її, а не лишаємо вибір, який перевірка потім відкине.
+            // її разом із часом, а не лишаємо вибір, який перевірка відкине.
             setDate("");
+            setTime("");
           }}
           aria-invalid={Boolean(state.fieldErrors?.location)}
           className={`${INPUT_CLS} cursor-pointer`}
@@ -402,45 +412,62 @@ export function BookingForm({
           name="date"
           schedule={daysForLocation}
           defaultValue={date}
-          onSelect={setDate}
+          onSelect={(day) => {
+            setDate(day);
+            // Час зі старого дня може бути поза межами нового — скидаємо,
+            // а не лишаємо вибір, який перевірка потім відкине.
+            setTime("");
+          }}
           invalid={Boolean(state.fieldErrors?.date)}
           awaitingLocation={!location}
         />
       </Field>
 
-      <Field label="Коли зручно">
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {PREFERRED_TIMES.map((t) => {
-            // Проміжок, який майстриня не відкрила, лишається на місці, але
-            // недоступний: зникни він — сітка з трьох плиток стрибала б на
-            // кожен вибір дати.
-            const open = isSlotOpen(daysForLocation, date, t.id);
+      <Field label="Час" error={state.fieldErrors?.time}>
+        {/* Значення для Server Action: сітка кнопок сама нічого не шле. */}
+        <input type="hidden" name="time" value={time} />
 
-            return (
-              <Choice
-                key={`${date}-${t.id}`}
-                name="time"
-                value={t.id}
-                disabled={!open}
-                defaultChecked={open && sent?.time === t.id}
-              >
-                <span className="leading-tight">
-                  {t.label}
-                  <span className="mt-0.5 block text-[12px] opacity-70">
-                    {t.range}
-                  </span>
-                </span>
-              </Choice>
-            );
-          })}
-        </div>
-        <span className="mt-1.5 block text-[13px] text-ink-muted">
-          {!date
-            ? "Оберіть дату — покажу, які проміжки цього дня відкриті."
-            : openSlots.length === 0
-              ? "Цього дня вільних проміжків немає."
-              : "Точний час узгодимо — підберу вільне вікно в цьому проміжку."}
-        </span>
+        {!date ? (
+          <p className="mt-2 text-[15px] text-ink-muted">
+            Спершу оберіть дату — покажу вільні години.
+          </p>
+        ) : times.length === 0 ? (
+          <p className="mt-2 text-[15px] text-ink-muted">
+            На цей день вільних годин уже немає. Оберіть, будь ласка, іншу дату.
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {times.map((minutes) => {
+                const value = formatTime(minutes);
+                const active = value === time;
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTime(value)}
+                    aria-pressed={active}
+                    className={[
+                      "tnum min-h-[48px] cursor-pointer rounded-2xl border text-[15px]",
+                      "transition-colors duration-200",
+                      active
+                        ? "border-ink bg-ink text-white"
+                        : "border-line bg-canvas hover:border-ink",
+                    ].join(" ")}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="mt-1.5 block text-[13px] text-ink-muted">
+              {dayHours
+                ? `Цього дня працюю ${hoursLabel(dayHours)}.`
+                : "Оберіть зручну годину."}
+            </span>
+          </>
+        )}
       </Field>
 
       <Group

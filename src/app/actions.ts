@@ -2,22 +2,27 @@
 
 import { db } from "@/lib/db/client";
 import { escapeHtml, sendTelegram } from "@/lib/notify";
+import { sendPush } from "@/lib/push";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { dayTitle } from "@/lib/calendar";
 import { readSchedule } from "@/lib/db/working-days";
-import { isDateAvailable, isSlotOpen } from "@/lib/schedule";
+import {
+  formatTime,
+  isDateAvailable,
+  isTimeAvailable,
+  parseTime,
+  slotForTime,
+} from "@/lib/schedule";
 import {
   contraindicationLabels,
   isContactChannel,
   isContraindication,
-  isPreferredTime,
   isTapeColor,
   isValidHandle,
   needsHandle,
   needsReview,
   normalizeHandle,
   parseHeight,
-  preferredTimeLabel,
   type ContactChannel,
 } from "@/lib/intake";
 
@@ -31,6 +36,7 @@ export type BookingState = {
       | "service"
       | "location"
       | "date"
+      | "time"
       | "channel"
       | "handle"
       | "height"
@@ -221,15 +227,26 @@ export async function submitBooking(
     fieldErrors.height = "Зріст у сантиметрах, наприклад 168.";
   }
 
-  // Проміжок дня приймаємо лише той, який справді відкритий цього дня.
-  // Закритий не помилка, а «не вказано»: поле необов'язкове, і втрачати через
-  // нього готову заявку не варто — точний час однаково ставить майстриня.
-  const preferredTime =
-    isPreferredTime(timeRaw) &&
-    locationSchedule &&
-    isSlotOpen(locationSchedule, date, timeRaw)
-      ? timeRaw
-      : null;
+  // Час звіряємо з робочими годинами дня — тими самими, з яких форма щойно
+  // намалювала сітку (`timesFor`). Тепер це точна година, а не орієнтир, тож
+  // поле стало обов'язковим: заявка «десь увечері» знову означала б
+  // узгодження листуванням, заради скорочення якого графік і заводили.
+  const minutes = parseTime(timeRaw);
+
+  if (!fieldErrors.date) {
+    if (minutes === null) {
+      fieldErrors.time = "Оберіть час.";
+    } else if (
+      !locationSchedule ||
+      !isTimeAvailable(locationSchedule, date, minutes)
+    ) {
+      fieldErrors.time = "Цей час уже недоступний — оберіть інший.";
+    }
+  }
+
+  // Проміжок анкети рахуємо з години: колонка `preferred_time` лишається як
+  // орієнтир у списку заявок, але джерело правди тепер одне — сам час.
+  const preferredTime = minutes !== null ? slotForTime(minutes) : null;
 
   // Без згоди заявку зберігати не можна: у ній телефон і дані про здоров'я.
   if (!consent) {
@@ -257,17 +274,18 @@ export async function submitBooking(
     };
   }
 
-  const { error } = await db().from("requests").insert({
+  const row = {
     name,
     phone: normalized,
     service_slug: service,
     location_slug: location,
     preferred_date: date,
     note: note || null,
-    status: "new",
+    status: "new" as const,
     contact_channel: channel,
     contact_handle: needsHandle(channel) ? handle : null,
     preferred_time: preferredTime,
+    preferred_at: minutes !== null ? formatTime(minutes) : null,
     // Колір звіряємо з асортиментом — у базу має лягти назва зі списку.
     tape_color: isTapeColor(colorRaw) ? colorRaw : null,
     height_cm: heightCm,
@@ -275,7 +293,24 @@ export async function submitBooking(
     contraindications,
     // Момент згоди, а не факт: для персональних даних важливо саме коли.
     consent_at: new Date().toISOString(),
-  });
+  };
+
+  let { error } = await db().from("requests").insert(row);
+
+  // Колонки `preferred_at` може ще не бути: код їде на прод раніше, ніж хтось
+  // виконає міграцію 0012, і між цими двома моментами кожна заявка падала б
+  // цілком — через поле, без якого вона цілком дієздатна. Тому один повтор
+  // без нього: втратити годину в заявці прикро, втратити заявку — недопустимо.
+  // 42703 — undefined_column у Postgres.
+  if (error?.code === "42703" && "preferred_at" in row) {
+    console.warn(
+      "[booking] немає колонки requests.preferred_at — виконайте міграцію 0012; " +
+        "заявку збережено без точної години",
+    );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- деструктуризація саме щоб прибрати поле
+    const { preferred_at, ...withoutTime } = row;
+    ({ error } = await db().from("requests").insert(withoutTime));
+  }
 
   if (error) {
     // Заявку втрачати не можна: лишаємо слід у логах, щоб її можна було
@@ -297,7 +332,7 @@ export async function submitBooking(
   }
 
   const flagged = needsReview(contraindications);
-  const timeLabel = preferredTime ? preferredTimeLabel(preferredTime) : null;
+  const timeLabel = minutes !== null ? formatTime(minutes) : null;
   const tapeColor = isTapeColor(colorRaw) ? colorRaw : null;
 
   // Канал і нік — щоб майстриня одразу знала, де шукати людину (крок 2), а не
@@ -308,32 +343,48 @@ export async function submitBooking(
 
   // Сповіщення після збереження і без await-залежності від успіху: заявка вже
   // в базі, тож проблеми Telegram не мають ламати відповідь клієнтці.
-  await sendTelegram(
-    [
-      "<b>Нова заявка з сайту</b>",
-      "",
-      `<b>Ім'я:</b> ${escapeHtml(name)}`,
-      `<b>Телефон:</b> ${escapeHtml(normalized)}`,
-      `<b>Послуга:</b> ${escapeHtml(matched!.title)}`,
-      `<b>Кабінет:</b> ${escapeHtml(matchedLocation!.city)}`,
-      `<b>Бажана дата:</b> ${dayTitle(new Date(date))}`,
-      timeLabel ? `<b>Зручний час:</b> ${escapeHtml(timeLabel)}` : "",
-      contactLine,
-      tapeColor ? `<b>Колір тейпу:</b> ${escapeHtml(tapeColor)}` : "",
-      heightCm ? `<b>Зріст:</b> ${heightCm} см` : "",
-      measurements ? `<b>Об'єми:</b> ${escapeHtml(measurements)}` : "",
-      note ? `<b>Коментар:</b> ${escapeHtml(note)}` : "",
-      // Найважливіше — в кінці, щоб не загубилось серед решти рядків.
-      flagged
-        ? "\n⚠️ <b>Потребує узгодження:</b>\n" +
-          contraindicationLabels(contraindications)
-            .map((l) => `• ${escapeHtml(l)}`)
-            .join("\n")
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  );
+  //
+  // Два канали паралельно, не по черзі: Telegram веде в чат, пуш — одразу в
+  // розділ заявок адмінки. Обидва мовчки ковтають власні помилки, тож
+  // `allSettled` тут не потрібен, а `Promise.all` не додає їм затримки один
+  // від одного — інакше повільний Telegram затримував би й пуш.
+  await Promise.all([
+    sendTelegram(
+      [
+        "<b>Нова заявка з сайту</b>",
+        "",
+        `<b>Ім'я:</b> ${escapeHtml(name)}`,
+        `<b>Телефон:</b> ${escapeHtml(normalized)}`,
+        `<b>Послуга:</b> ${escapeHtml(matched!.title)}`,
+        `<b>Кабінет:</b> ${escapeHtml(matchedLocation!.city)}`,
+        `<b>Бажана дата:</b> ${dayTitle(new Date(date))}`,
+          timeLabel ? `<b>Час:</b> ${escapeHtml(timeLabel)}` : "",
+        contactLine,
+        tapeColor ? `<b>Колір тейпу:</b> ${escapeHtml(tapeColor)}` : "",
+        heightCm ? `<b>Зріст:</b> ${heightCm} см` : "",
+        measurements ? `<b>Об'єми:</b> ${escapeHtml(measurements)}` : "",
+        note ? `<b>Коментар:</b> ${escapeHtml(note)}` : "",
+        // Найважливіше — в кінці, щоб не загубилось серед решти рядків.
+        flagged
+          ? "\n⚠️ <b>Потребує узгодження:</b>\n" +
+            contraindicationLabels(contraindications)
+              .map((l) => `• ${escapeHtml(l)}`)
+              .join("\n")
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    ),
+    sendPush({
+      // Заголовок несе найважливіше: протипоказання видно ще до розкриття.
+      title: flagged ? "⚠️ Заявка з протипоказанням" : "Нова заявка з сайту",
+      body: `${name}, ${matched!.title} — ${dayTitle(new Date(date))}, ${matchedLocation!.city}`,
+      url: "/admin/requests",
+      // Спільний тег: п'ять заявок за вечір дадуть один рядок у шторці, що
+      // оновлюється, а не п'ять окремих сповіщень.
+      tag: "request",
+    }),
+  ]);
 
   return {
     status: "success",

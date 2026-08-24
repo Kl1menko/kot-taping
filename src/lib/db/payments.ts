@@ -117,9 +117,14 @@ export async function updatePaymentStatus(input: {
   status: PaymentStatus;
   failureReason?: string;
   errCode?: string;
-}): Promise<PaymentRow | null> {
+}): Promise<(PaymentRow & { justPaid: boolean }) | null> {
   const current = await getPaymentByInvoice(input.invoiceId);
   if (!current) return null;
+
+  // Чи це перехід в «оплачено» саме зараз. monobank повторює вебхук, доки не
+  // отримає 200, тож без цієї ознаки кожен повтор виглядав би як нова оплата —
+  // і слав би ще один пуш.
+  const justPaid = isPaid(input.status) && !current.paid_at;
 
   const { data, error } = await db()
     .from("payments")
@@ -136,5 +141,5 @@ export async function updatePaymentStatus(input: {
     .single();
 
   if (error) throw new Error(`Не вдалося оновити рахунок: ${error.message}`);
-  return data;
+  return { ...data, justPaid };
 }

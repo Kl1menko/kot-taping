@@ -4,8 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   bulkSetWorkingDays,
+  setDayHours,
   setDayNote,
-  setDaySlots,
   toggleWorkingDay,
 } from "@/app/admin/schedule/actions";
 import {
@@ -16,11 +16,12 @@ import {
   monthTitle,
   startOfDay,
 } from "@/lib/calendar";
-import { PREFERRED_TIMES } from "@/lib/intake";
 import {
   countInMonth,
+  formatTime,
+  hoursFor,
+  hoursLabel,
   isWorkingDay,
-  slotsFor,
   toSchedule,
   type WorkingDay,
 } from "@/lib/schedule";
@@ -186,12 +187,9 @@ export function ScheduleScreen({
           {grid.map((date) => {
             const key = dateKey(date);
             const working = isWorkingDay(schedule, key);
-            const slots = slotsFor(schedule, key);
+            const hours = hoursFor(schedule, key);
             const outside = date.getMonth() !== month.getMonth();
             const past = key < today;
-            // Звужений день має відрізнятись від повного: інакше «лише ранок»
-            // виглядає як звичайний робочий, і майстриня про це забуває.
-            const partial = working && slots.length < PREFERRED_TIMES.length;
 
             return (
               <button
@@ -205,9 +203,13 @@ export function ScheduleScreen({
                   if (working) setOpenDay(key);
                 }}
                 aria-pressed={working}
-                aria-label={`${dayTitle(date)} — ${working ? "робочий" : "вихідний"}`}
+                aria-label={
+                  hours
+                    ? `${dayTitle(date)} — ${hoursLabel(hours)}`
+                    : `${dayTitle(date)} — вихідний`
+                }
                 className={[
-                  "tnum relative aspect-square cursor-pointer rounded-xl text-[15px]",
+                  "tnum relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl text-[15px]",
                   "transition-colors duration-200 disabled:cursor-wait",
                   working
                     ? "bg-ink text-white hover:bg-[#2a2a2a]"
@@ -217,13 +219,15 @@ export function ScheduleScreen({
                   key === today ? "ring-2 ring-ink ring-offset-2 ring-offset-surface" : "",
                 ].join(" ")}
               >
-                {date.getDate()}
-                {partial && (
-                  <span
-                    aria-hidden="true"
-                    title="Відкрито не весь день"
-                    className="absolute inset-x-0 bottom-1.5 mx-auto block size-1.5 rounded-full bg-white/70"
-                  />
+                <span>{date.getDate()}</span>
+                {/* Години просто в клітинці: майстриня має бачити розклад
+                    місяця цілком, не відкриваючи кожен день окремо. На
+                    вузькому екрані вони не влазять — там лишається саме
+                    число, а години видно в листі дня. */}
+                {hours && (
+                  <span className="mt-0.5 hidden text-[9px] leading-none opacity-70 sm:block">
+                    {formatTime(hours.opensAt)}
+                  </span>
                 )}
               </button>
             );
@@ -270,22 +274,25 @@ export function ScheduleScreen({
         </div>
 
         <p className="mt-4 text-[13px] leading-relaxed text-ink-muted">
-          Тап по числу відкриває або закриває день. Довгий тап (правий клік) на
-          відкритому дні — щоб звузити проміжки чи додати нотатку. Тап по
-          підпису дня тижня перемикає всі такі дні місяця.
+          Тап по числу відкриває або закриває день (типово 10:00–18:00).
+          Довгий тап (правий клік) на відкритому дні — щоб змінити години чи
+          додати нотатку. Тап по підпису дня тижня перемикає всі такі дні
+          місяця.
         </p>
       </div>
 
-      {openDay && (
+      {openDay && hoursFor(schedule, openDay) && (
         <DaySheet
           day={openDay}
-          slots={slotsFor(schedule, openDay)}
+          hours={hoursFor(schedule, openDay)!}
           note={days.find((d) => d.day === openDay)?.note ?? ""}
           pending={pending}
           onClose={() => setOpenDay(null)}
-          onSaveSlots={(next) =>
-            run(() => setDaySlots(locationId, openDay, next))
-          }
+          locationId={locationId}
+          onDone={() => {
+            setOpenDay(null);
+            router.refresh();
+          }}
           onSaveNote={(note) => run(() => setDayNote(locationId, openDay, note))}
         />
       )}
@@ -293,60 +300,100 @@ export function ScheduleScreen({
   );
 }
 
-/** Проміжки й нотатка одного дня. */
+/** Години й нотатка одного дня. */
 function DaySheet({
   day,
-  slots,
+  hours,
   note,
   pending,
+  locationId,
   onClose,
-  onSaveSlots,
+  onDone,
   onSaveNote,
 }: {
   day: string;
-  slots: string[];
+  hours: { opensAt: number; closesAt: number };
   note: string;
   pending: boolean;
+  locationId: string;
   onClose: () => void;
-  onSaveSlots: (slots: string[]) => void;
+  onDone: () => void;
   onSaveNote: (note: string) => void;
 }) {
   const [y, m, d] = day.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  const [draftNote, setDraftNote] = useState(note);
 
-  const toggle = (id: string) => {
-    const next = slots.includes(id)
-      ? slots.filter((s) => s !== id)
-      : [...slots, id];
-    onSaveSlots(next);
+  const [opens, setOpens] = useState(formatTime(hours.opensAt));
+  const [closes, setCloses] = useState(formatTime(hours.closesAt));
+  const [draftNote, setDraftNote] = useState(note);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
+
+  const save = () => {
+    setError(null);
+    startSaving(async () => {
+      const result = await setDayHours(locationId, day, opens, closes);
+      if (!result.ok) {
+        setError(result.message ?? "Не вдалося зберегти.");
+        return;
+      }
+      if (draftNote !== note) onSaveNote(draftNote);
+      onDone();
+    });
   };
 
   return (
     <Sheet open onClose={onClose} title={dayTitle(date)}>
       <p className="text-[15px] text-ink-muted">
-        Клієнт бачить лише відмічені проміжки. Знімете всі — день стане
-        вихідним.
+        Клієнт бачить час на запис у цих межах, із кроком 30 хвилин.
       </p>
 
-      <div className="mt-5 space-y-2">
-        {PREFERRED_TIMES.map((t) => (
-          <label
-            key={t.id}
-            className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-2xl bg-surface px-5"
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-[14px] text-ink-muted">Початок</span>
+          <input
+            type="time"
+            value={opens}
+            step={1800}
+            disabled={pending || saving}
+            onChange={(e) => setOpens(e.target.value)}
+            className={`${INPUT_CLS} cursor-pointer`}
+          />
+        </label>
+        <label className="block">
+          <span className="text-[14px] text-ink-muted">Кінець</span>
+          <input
+            type="time"
+            value={closes}
+            step={1800}
+            disabled={pending || saving}
+            onChange={(e) => setCloses(e.target.value)}
+            className={`${INPUT_CLS} cursor-pointer`}
+          />
+        </label>
+      </div>
+
+      {/* Найчастіші розклади одним тапом: набирати 10:00 і 18:00 вручну
+          двадцять разів на місяць — саме та робота, від якої графік мав
+          позбавити. */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {[
+          ["10:00", "18:00"],
+          ["09:00", "20:00"],
+          ["12:00", "20:00"],
+        ].map(([from, to]) => (
+          <button
+            key={`${from}-${to}`}
+            type="button"
+            disabled={pending || saving}
+            onClick={() => {
+              setOpens(from);
+              setCloses(to);
+            }}
+            className="cursor-pointer rounded-full bg-canvas px-4 py-2 text-[13px] text-ink-muted transition-colors duration-200 hover:text-ink disabled:cursor-not-allowed"
           >
-            <input
-              type="checkbox"
-              checked={slots.includes(t.id)}
-              disabled={pending}
-              onChange={() => toggle(t.id)}
-              className="size-5 shrink-0 cursor-pointer accent-[#111111]"
-            />
-            <span className="text-[16px]">
-              {t.label}
-              <span className="ml-2 text-[14px] text-ink-muted">{t.range}</span>
-            </span>
-          </label>
+            {from}–{to}
+          </button>
         ))}
       </div>
 
@@ -365,16 +412,15 @@ function DaySheet({
         </label>
       </div>
 
+      {error && (
+        <p role="alert" className="mt-3 text-[14px] text-[#b3261e]">
+          {error}
+        </p>
+      )}
+
       <div className="mt-6 flex gap-2">
-        <Button
-          full
-          disabled={pending || draftNote === note}
-          onClick={() => {
-            onSaveNote(draftNote);
-            onClose();
-          }}
-        >
-          Зберегти
+        <Button full disabled={pending || saving} onClick={save}>
+          {saving ? "Зберігаю…" : "Зберегти"}
         </Button>
         <Button tone="light" onClick={onClose}>
           Закрити

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { parseInvoiceState, verifyWebhook, bodyDigest, MonoError } from "@/lib/mono";
 import { updatePaymentStatus } from "@/lib/db/payments";
+import { sendPush } from "@/lib/push";
+import { formatAmount } from "@/lib/payments";
 
 /**
  * Вебхук monobank: банк повідомляє, що статус рахунку змінився.
@@ -72,6 +74,18 @@ export async function POST(req: Request) {
       // Рахунку немає в базі: або він від іншого стенду з тим самим токеном,
       // або його видалили разом із записом. Повторний виклик не допоможе.
       console.warn(`[mono] вебхук для невідомого рахунку ${state.invoiceId}`);
+    } else if (updated.justPaid) {
+      // Лише на першому переході в «оплачено»: банк повторює вебхук, доки не
+      // дістане 200, і без цієї умови кожен повтор слав би ще один пуш.
+      //
+      // Помилку ковтаємо свідомо: гроші вже зараховані, і збій сповіщення не
+      // має обертатись 500-ю у відповідь банку — та спричинила б нові повтори.
+      await sendPush({
+        title: "Оплату отримано",
+        body: `${formatAmount(updated.amount)} — рахунок закрито.`,
+        url: updated.kit_order_id ? "/admin/kits" : "/admin/calendar",
+        tag: `payment-${updated.invoice_id}`,
+      });
     }
   } catch (error) {
     // База не відповіла — саме той випадок, коли повтор доречний.

@@ -69,4 +69,23 @@ export const env = {
 
   /** Чи налаштований еквайринг — щоб не показувати кнопку, яка впаде. */
   hasMonoToken: () => Boolean(optional("MONO_TOKEN")),
+
+  /**
+   * Ключі VAPID для пуш-сповіщень в адмінку-PWA.
+   *
+   * Публічний дублюється як NEXT_PUBLIC_VAPID_PUBLIC_KEY — його треба знати
+   * браузеру, щоб оформити підписку, і секретом він не є за побудовою.
+   * Приватним підписуються самі пуші, тож він секрет нарівні з рештою тут.
+   *
+   * `optional`: без ключів пуші просто мовчать, а система працює — рівно як
+   * із Telegram. Згенерувати пару: `npx web-push generate-vapid-keys`.
+   */
+  vapidPublicKey: () => optional("VAPID_PUBLIC_KEY"),
+  vapidPrivateKey: () => optional("VAPID_PRIVATE_KEY"),
+
+  /**
+   * Контакт відправника — вимога специфікації Web Push: push-сервіс має куди
+   * поскаржитись на нашу розсилку. Годиться і `mailto:`, і адреса сайту.
+   */
+  vapidSubject: () => optional("VAPID_SUBJECT") ?? "mailto:info@kotovataping.com",
 };

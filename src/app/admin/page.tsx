@@ -7,6 +7,7 @@ import { needsReview } from "@/lib/intake";
 import type { KitOrderStatus } from "@/lib/kits";
 import { TodayList } from "@/components/admin/today-list";
 import { Agenda } from "@/components/admin/agenda";
+import { PushToggle } from "@/components/admin/push-toggle";
 
 export const metadata = { title: "Сьогодні" };
 
@@ -108,6 +109,19 @@ export default async function AdminHome() {
         </h2>
         <div className="mt-3">
           <TodayList appointments={today} now={now} />
+        </div>
+      </section>
+
+      {/* Вмикач пушів — унизу головного екрана адмінки: він же стартовий для
+          PWA (див. `start_url` у manifest.ts), тож саме тут майстриня його й
+          побачить, вперше відкривши застосунок на телефоні. Налаштування
+          разове, тому місце під розкладом, а не над ним. */}
+      <section className="mt-9">
+        <h2 className="text-[13px] uppercase tracking-[0.12em] text-ink-muted">
+          Налаштування
+        </h2>
+        <div className="mt-3">
+          <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
         </div>
       </section>
     </>
