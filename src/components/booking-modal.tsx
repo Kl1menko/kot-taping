@@ -11,6 +11,7 @@ import {
 } from "react";
 import { BookingForm } from "./booking-form";
 import type { Service } from "@/lib/services";
+import type { WorkingDay } from "@/lib/schedule";
 
 type BookingModalContext = {
   /** Opens the sheet, optionally preselecting a service by slug. */
@@ -31,10 +32,13 @@ export function useBookingModal() {
 export function BookingModalProvider({
   children,
   services,
+  schedule = {},
 }: {
   children: ReactNode;
   /** Прайс із бази — той самий список, що й у картках послуг. */
   services: Service[];
+  /** Робочі дні по кабінетах: slug → відкриті дні. Порожньо — запис закрито. */
+  schedule?: Record<string, WorkingDay[]>;
 }) {
   const [service, setService] = useState<string | undefined>();
   const [isOpen, setIsOpen] = useState(false);
@@ -149,6 +153,7 @@ export function BookingModalProvider({
               <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-8">
                 <BookingForm
                   services={services}
+                  schedule={schedule}
                   preselected={service}
                   onDone={close}
                   fullWidthSubmit

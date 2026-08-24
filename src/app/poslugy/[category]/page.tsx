@@ -9,6 +9,7 @@ import { ServiceList } from "@/components/service-list";
 import { BookNowButton } from "@/components/book-now-button";
 import { Card, Container, SectionLabel } from "@/components/ui";
 import { listPublicServices } from "@/lib/db/public-services";
+import { listPublicSchedule } from "@/lib/db/working-days";
 import { CATEGORIES, type ServiceCategory } from "@/lib/services";
 import { LOCATIONS } from "@/lib/contacts";
 import { plural } from "@/lib/agenda";
@@ -56,7 +57,10 @@ export default async function CategoryPage(
   const seo = seoFor(category);
   if (!seo) notFound();
 
-  const all = await listPublicServices();
+  const [all, schedule] = await Promise.all([
+    listPublicServices(),
+    listPublicSchedule(),
+  ]);
   const services = all.filter((s) => s.category === category);
 
   // Категорію могли вимкнути в адмінці цілком: показувати заголовок над
@@ -84,7 +88,7 @@ export default async function CategoryPage(
         services={services}
       />
 
-      <PageShell services={all}>
+      <PageShell services={all} schedule={schedule}>
         <PageHero
           eyebrow={label}
           title={seo.heading}

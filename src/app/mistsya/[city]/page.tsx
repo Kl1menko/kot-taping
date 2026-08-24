@@ -9,6 +9,7 @@ import { BookNowButton } from "@/components/book-now-button";
 import { SocialIcon } from "@/components/social-icons";
 import { Card, Container, SectionLabel } from "@/components/ui";
 import { listPublicServices } from "@/lib/db/public-services";
+import { listPublicSchedule } from "@/lib/db/working-days";
 import { CATEGORIES } from "@/lib/services";
 import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { CATEGORY_SEO, cityBySlug, pageMetadata } from "@/lib/seo";
@@ -43,7 +44,10 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
   const place = cityBySlug(city);
   if (!place) notFound();
 
-  const services = await listPublicServices();
+  const [services, schedule] = await Promise.all([
+    listPublicServices(),
+    listPublicSchedule(),
+  ]);
   const present = CATEGORIES.filter((cat) =>
     services.some((s) => s.category === cat.id),
   );
@@ -54,7 +58,7 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
     <>
       <CityStructuredData slug={city} />
 
-      <PageShell services={services}>
+      <PageShell services={services} schedule={schedule}>
         <PageHero
           eyebrow={place.city}
           title={`Естетичне тейпування ${place.locative}`}

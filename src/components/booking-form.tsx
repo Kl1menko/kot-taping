@@ -1,12 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, formatPrice, type Service } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
-import { DATE_INPUT_CLS, INPUT_CLS } from "@/lib/form";
+import { INPUT_CLS } from "@/lib/form";
+import { DatePicker } from "./date-picker";
+import {
+  isSlotOpen,
+  slotsFor,
+  toSchedule,
+  type WorkingDay,
+} from "@/lib/schedule";
 import {
   CONTACT_CHANNELS,
   CONTRAINDICATIONS,
@@ -90,12 +97,15 @@ function Choice({
   name,
   value,
   defaultChecked,
+  disabled,
   onSelect,
   children,
 }: {
   name: string;
   value: string;
   defaultChecked?: boolean;
+  /** Проміжок закритий у графіку: видно, але обрати не можна. */
+  disabled?: boolean;
   /** Необов'язковий: потрібен лише тим, хто показує залежні поля. */
   onSelect?: (value: string) => void;
   children: React.ReactNode;
@@ -103,16 +113,20 @@ function Choice({
   return (
     <label
       className={[
-        "flex min-h-[52px] cursor-pointer items-center justify-center rounded-2xl border px-3 text-center text-[15px]",
+        "flex min-h-[52px] items-center justify-center rounded-2xl border px-3 text-center text-[15px]",
         "border-line bg-canvas transition-colors duration-200",
         "has-[:focus-visible]:border-ink",
         "has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-white",
+        disabled
+          ? "cursor-not-allowed border-dashed text-ink-muted/50"
+          : "cursor-pointer",
       ].join(" ")}
     >
       <input
         type="radio"
         name={name}
         value={value}
+        disabled={disabled}
         defaultChecked={defaultChecked}
         onChange={() => onSelect?.(value)}
         className="sr-only"
@@ -155,6 +169,7 @@ function SubmitButton({ full }: { full?: boolean }) {
 
 export function BookingForm({
   services,
+  schedule = {},
   preselected = "",
   /** Rendered in the modal: lets the sheet close itself from the success state. */
   onDone,
@@ -162,6 +177,13 @@ export function BookingForm({
 }: {
   /** Прайс із бази: у списку лише те, на що справді можна записатись. */
   services: Service[];
+  /**
+   * Робочі дні по кабінетах — slug кабінету → відкриті дні.
+   *
+   * Приходить масивом, а не готовою `Schedule`: `Map` не переживає межу
+   * сервер→клієнт, тож збираємо її вже тут.
+   */
+  schedule?: Record<string, WorkingDay[]>;
   preselected?: string;
   onDone?: () => void;
   fullWidthSubmit?: boolean;
@@ -181,6 +203,25 @@ export function BookingForm({
   const [channel, setChannel] = useState<ContactChannel>(
     isContactChannel(sent?.channel ?? "") ? (sent!.channel as ContactChannel) : "telegram",
   );
+
+  // Кабінет тримаємо в стані: від нього залежить, які дати показувати. Обидва
+  // кабінети в одній зоні, але майстриня фізично не буває в двох містах
+  // одночасно, тож графік у кожного свій.
+  const [location, setLocation] = useState(sent?.location ?? "");
+
+  // `Map` не переживає межу сервер→клієнт, тож збираємо її тут — і лише коли
+  // змінився кабінет, а не на кожен набраний у формі символ.
+  const daysForLocation = useMemo(
+    () => toSchedule(schedule[location] ?? []),
+    [schedule, location],
+  );
+
+  // Дата зі стану, а не з DOM: від неї залежать доступні проміжки нижче.
+  const [date, setDate] = useState(sent?.date ?? "");
+
+  // Проміжки саме цього дня. День закритий або не обраний — показуємо всі
+  // три погашеними, щоб поле не зникало й не смикало розкладку.
+  const openSlots = slotsFor(daysForLocation, date);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -334,7 +375,13 @@ export function BookingForm({
         <select
           name="location"
           required
-          defaultValue={sent?.location ?? ""}
+          value={location}
+          onChange={(e) => {
+            setLocation(e.target.value);
+            // Дата зі старого кабінету може бути закрита в новому — скидаємо
+            // її, а не лишаємо вибір, який перевірка потім відкине.
+            setDate("");
+          }}
           aria-invalid={Boolean(state.fieldErrors?.location)}
           className={`${INPUT_CLS} cursor-pointer`}
         >
@@ -350,36 +397,49 @@ export function BookingForm({
       </Field>
 
       <Field label="Бажана дата" error={state.fieldErrors?.date}>
-        <input
+        <DatePicker
+          key={location}
           name="date"
-          type="date"
-          required
-          defaultValue={sent?.date ?? ""}
-          aria-invalid={Boolean(state.fieldErrors?.date)}
-          className={`${INPUT_CLS} ${DATE_INPUT_CLS} cursor-pointer`}
+          schedule={daysForLocation}
+          defaultValue={date}
+          onSelect={setDate}
+          invalid={Boolean(state.fieldErrors?.date)}
+          awaitingLocation={!location}
         />
       </Field>
 
       <Field label="Коли зручно">
         <div className="mt-2 grid grid-cols-3 gap-2">
-          {PREFERRED_TIMES.map((t) => (
-            <Choice
-              key={t.id}
-              name="time"
-              value={t.id}
-              defaultChecked={sent?.time === t.id}
-            >
-              <span className="leading-tight">
-                {t.label}
-                <span className="mt-0.5 block text-[12px] opacity-70">
-                  {t.range}
+          {PREFERRED_TIMES.map((t) => {
+            // Проміжок, який майстриня не відкрила, лишається на місці, але
+            // недоступний: зникни він — сітка з трьох плиток стрибала б на
+            // кожен вибір дати.
+            const open = isSlotOpen(daysForLocation, date, t.id);
+
+            return (
+              <Choice
+                key={`${date}-${t.id}`}
+                name="time"
+                value={t.id}
+                disabled={!open}
+                defaultChecked={open && sent?.time === t.id}
+              >
+                <span className="leading-tight">
+                  {t.label}
+                  <span className="mt-0.5 block text-[12px] opacity-70">
+                    {t.range}
+                  </span>
                 </span>
-              </span>
-            </Choice>
-          ))}
+              </Choice>
+            );
+          })}
         </div>
         <span className="mt-1.5 block text-[13px] text-ink-muted">
-          Точний час узгодимо — підберу вільне вікно в цьому проміжку.
+          {!date
+            ? "Оберіть дату — покажу, які проміжки цього дня відкриті."
+            : openSlots.length === 0
+              ? "Цього дня вільних проміжків немає."
+              : "Точний час узгодимо — підберу вільне вікно в цьому проміжку."}
         </span>
       </Field>
 

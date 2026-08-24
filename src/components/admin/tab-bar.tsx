@@ -90,6 +90,7 @@ const TABS = [
  * кнопкою «Ще». На десктопі такого поділу немає: там усе в одному рядку.
  */
 const MORE = [
+  { href: "/admin/schedule", label: "Графік" },
   { href: "/admin/services", label: "Прайс" },
   { href: "/admin/analytics", label: "Аналітика" },
 ];

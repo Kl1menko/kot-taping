@@ -14,6 +14,7 @@ import { Reveal } from "@/components/reveal";
 import { StructuredData } from "@/components/structured-data";
 import { BookingModalProvider } from "@/components/booking-modal";
 import { listPublicServices } from "@/lib/db/public-services";
+import { listPublicSchedule } from "@/lib/db/working-days";
 import { listPublicKits } from "@/lib/db/public-kits";
 
 /**
@@ -29,13 +30,14 @@ export const revalidate = 3600;
 export default async function Home() {
   // Один запит на сторінку: прайс потрібен і карткам, і формі запису, і
   // schema.org — читаємо його тут і передаємо вниз, щоб не ходити в базу тричі.
-  const [services, kits] = await Promise.all([
+  const [services, kits, schedule] = await Promise.all([
     listPublicServices(),
     listPublicKits(),
+    listPublicSchedule(),
   ]);
 
   return (
-    <BookingModalProvider services={services}>
+    <BookingModalProvider services={services} schedule={schedule}>
       <StructuredData services={services} />
       <main id="main" className="pb-24 md:pb-0">
         <Hero />

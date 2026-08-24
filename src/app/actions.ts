@@ -4,6 +4,8 @@ import { db } from "@/lib/db/client";
 import { escapeHtml, sendTelegram } from "@/lib/notify";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { dayTitle } from "@/lib/calendar";
+import { readSchedule } from "@/lib/db/working-days";
+import { isDateAvailable, isSlotOpen } from "@/lib/schedule";
 import {
   contraindicationLabels,
   isContactChannel,
@@ -171,14 +173,23 @@ export async function submitBooking(
     fieldErrors.location = "Оберіть кабінет зі списку.";
   }
 
+  // Дату звіряємо з графіком, а не лише з «не в минулому».
+  //
+  // Це та сама перевірка, яку робить форма, малюючи календар (див.
+  // `isDateAvailable`), тож відкинути день, який вона показала доступним, тут
+  // неможливо. Але покластися на клієнта не можна: поле `date` приходить із
+  // браузера, і графік — єдине, що відділяє заявку на робочу суботу від
+  // заявки на неділю, коли кабінет зачинений.
+  const locationSchedule = await readSchedule(location);
+
   if (!date) {
     fieldErrors.date = "Оберіть бажану дату.";
-  } else {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (new Date(date) < today) {
-      fieldErrors.date = "Дата не може бути в минулому.";
-    }
+  } else if (!locationSchedule) {
+    // Кабінет без графіка: або його щойно закрили, або графік ще не заведено.
+    fieldErrors.date = "Для цього кабінету поки немає відкритих дат.";
+  } else if (!isDateAvailable(locationSchedule, date)) {
+    fieldErrors.date =
+      "Ця дата вже недоступна — оберіть, будь ласка, іншу з відкритих.";
   }
 
   // Канал звіряємо зі списком, а не довіряємо полю: за ним майстриня шукатиме
@@ -209,6 +220,16 @@ export async function submitBooking(
   if (!parsedHeight.ok) {
     fieldErrors.height = "Зріст у сантиметрах, наприклад 168.";
   }
+
+  // Проміжок дня приймаємо лише той, який справді відкритий цього дня.
+  // Закритий не помилка, а «не вказано»: поле необов'язкове, і втрачати через
+  // нього готову заявку не варто — точний час однаково ставить майстриня.
+  const preferredTime =
+    isPreferredTime(timeRaw) &&
+    locationSchedule &&
+    isSlotOpen(locationSchedule, date, timeRaw)
+      ? timeRaw
+      : null;
 
   // Без згоди заявку зберігати не можна: у ній телефон і дані про здоров'я.
   if (!consent) {
@@ -246,7 +267,7 @@ export async function submitBooking(
     status: "new",
     contact_channel: channel,
     contact_handle: needsHandle(channel) ? handle : null,
-    preferred_time: isPreferredTime(timeRaw) ? timeRaw : null,
+    preferred_time: preferredTime,
     // Колір звіряємо з асортиментом — у базу має лягти назва зі списку.
     tape_color: isTapeColor(colorRaw) ? colorRaw : null,
     height_cm: heightCm,
@@ -276,7 +297,7 @@ export async function submitBooking(
   }
 
   const flagged = needsReview(contraindications);
-  const timeLabel = preferredTimeLabel(timeRaw);
+  const timeLabel = preferredTime ? preferredTimeLabel(preferredTime) : null;
   const tapeColor = isTapeColor(colorRaw) ? colorRaw : null;
 
   // Канал і нік — щоб майстриня одразу знала, де шукати людину (крок 2), а не

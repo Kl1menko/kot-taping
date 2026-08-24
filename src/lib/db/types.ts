@@ -46,6 +46,24 @@ export type LocationRow = {
   created_at: string;
 };
 
+/**
+ * Робочий день кабінету — міграція 0008.
+ *
+ * Рядок = один відкритий день. Дня немає в таблиці — він неробочий: графік це
+ * білий список, тож «нічого не налаштовано» означає «нічого не відкрито».
+ */
+export type WorkingDayRow = {
+  id: string;
+  location_id: string;
+  /** `2026-08-08` — колонка `date`, без часу й зони. */
+  day: string;
+  /** Відкриті проміжки; дзеркалять PREFERRED_TIMES з @/lib/intake. */
+  slots: PreferredTime[];
+  /** Нотатка майстрині для себе. Клієнтка її не бачить. */
+  note: string | null;
+  created_at: string;
+};
+
 export type AppointmentStatus = "planned" | "done" | "cancelled" | "no_show";
 
 export type AppointmentRow = {
@@ -201,6 +219,7 @@ export type Database = {
     Tables: {
       services: Table<ServiceRow>;
       locations: Table<LocationRow>;
+      working_days: Table<WorkingDayRow>;
       clients: Table<ClientRow>;
       appointments: Table<AppointmentRow>;
       requests: Table<RequestRow>;

@@ -5,6 +5,7 @@ import { SiteFooter } from "./site-footer";
 import { MobileCta } from "./mobile-cta";
 import { Card } from "./ui";
 import type { Service } from "@/lib/services";
+import type { WorkingDay } from "@/lib/schedule";
 
 /**
  * Каркас внутрішньої сторінки.
@@ -17,18 +18,22 @@ import type { Service } from "@/lib/services";
  * Крихти живуть у `PageHero`, а не тут: окремою смужкою над героєм вони
  * розрізали сторінку зайвим швом, якого немає на головній.
  *
- * `services` іде в провайдер модалки: анкета запису відкривається з будь-якої
- * сторінки, і їй потрібен той самий прайс, що й на головній.
+ * `services` і `schedule` ідуть у провайдер модалки: анкета запису
+ * відкривається з будь-якої сторінки, і їй потрібні той самий прайс і той
+ * самий графік робочих днів, що й на головній.
  */
 export function PageShell({
   children,
   services,
+  schedule,
 }: {
   children: ReactNode;
   services: Service[];
+  /** Графік для анкети — так само, як прайс: потрібен на кожній сторінці. */
+  schedule?: Record<string, WorkingDay[]>;
 }) {
   return (
-    <BookingModalProvider services={services}>
+    <BookingModalProvider services={services} schedule={schedule}>
       {/* Шапка на своєму тлі, без лінії знизу: герой під нею білий, і межа
           між ними була б рискою впоперек порожнього місця. */}
       <Card as="div">

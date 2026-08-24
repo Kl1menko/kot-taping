@@ -8,6 +8,7 @@ import { CatalogStructuredData } from "@/components/structured-data";
 import { BookNowButton } from "@/components/book-now-button";
 import { Card, Container, SectionLabel } from "@/components/ui";
 import { listPublicServices } from "@/lib/db/public-services";
+import { listPublicSchedule } from "@/lib/db/working-days";
 import { CATEGORIES, type ServiceCategory } from "@/lib/services";
 import { LOCATIONS } from "@/lib/contacts";
 import { plural } from "@/lib/agenda";
@@ -32,7 +33,10 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function ServicesCatalog() {
-  const services = await listPublicServices();
+  const [services, schedule] = await Promise.all([
+    listPublicServices(),
+    listPublicSchedule(),
+  ]);
 
   // Порожні категорії ховаємо: майстриня може вимкнути всю групу в адмінці, і
   // посилання на сторінку без жодної послуги було б обіцянкою, якої немає.
@@ -55,7 +59,7 @@ export default async function ServicesCatalog() {
     <>
       <CatalogStructuredData counts={counts} />
 
-      <PageShell services={services}>
+      <PageShell services={services} schedule={schedule}>
         <PageHero
           eyebrow="Послуги та ціни"
           title="Тейпування обличчя й тіла — усі напрями"
