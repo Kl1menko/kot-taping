@@ -58,6 +58,49 @@ self.addEventListener("push", (event) => {
 });
 
 /**
+ * Браузер перевипустив підписку — треба перереєструвати її на сервері.
+ *
+ * Ендпойнт не вічний: браузери ротують його самі (закінчився термін ключа,
+ * оновився push-сервіс), і старий тихо перестає приймати пуші. Без цього
+ * обробника вмикач у адмінці показував би «увімкнено», а сповіщення не
+ * приходили б — найгірший з можливих станів, бо він не схожий на поломку.
+ *
+ * Ключ беремо з `event.oldSubscription`, а не з константи: у файлі, що
+ * віддається статикою, змінних оточення немає, а `applicationServerKey` старої
+ * підписки — це рівно наш VAPID-ключ.
+ */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      const key = event.oldSubscription?.options?.applicationServerKey;
+      if (!key) return;
+
+      try {
+        const fresh = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: key,
+        });
+
+        // Звичайним `fetch`, а не Server Action: воркер живе поза React, і
+        // єдиний доступний йому канал — HTTP-ендпойнт.
+        await fetch("/api/push/resubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscription: fresh.toJSON(),
+            oldEndpoint: event.oldSubscription?.endpoint ?? null,
+          }),
+        });
+      } catch (error) {
+        // Лишається мовчазний збій, але іншого виходу тут немає: показати
+        // помилку нікому, а валити воркер означало б втратити й решту пушів.
+        console.error("[sw] не вдалося перепідписатись:", error);
+      }
+    })(),
+  );
+});
+
+/**
  * Тап по сповіщенню: піднімаємо вже відкриту адмінку, а не плодимо вкладки.
  */
 self.addEventListener("notificationclick", (event) => {

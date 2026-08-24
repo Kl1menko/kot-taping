@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
+  listPushDevices,
+  removePushDevice,
   subscribeDevice,
   sendTestPush,
   unsubscribeDevice,
+  type PushDevice,
 } from "@/app/admin/push-actions";
 import { Button } from "./button";
 
@@ -34,6 +37,21 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/**
+ * «Сьогодні, 14:30» / «12 серпня» — коли востаннє достукались до пристрою.
+ *
+ * Точний час важить лише сьогодні: питання тут одне — «канал ще живий?».
+ */
+function formatWhen(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+
+  return sameDay
+    ? `сьогодні, ${date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
+    : date.toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
+}
+
 type State =
   | { kind: "checking" }
   /** Браузер не вміє пушів або ключа немає — показати причину, а не кнопку. */
@@ -47,6 +65,23 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey?: string }) {
   const [state, setState] = useState<State>({ kind: "checking" });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [devices, setDevices] = useState<PushDevice[]>([]);
+
+  /**
+   * Перечитати список пристроїв.
+   *
+   * Ендпойнт передаємо, щоб позначити рядок цього пристрою: без позначки в
+   * списку з двох однакових «iPhone · Safari» не зрозуміти, котрий свій.
+   */
+  const refreshDevices = async (endpoint?: string) => {
+    try {
+      setDevices(await listPushDevices(endpoint));
+    } catch {
+      // Список — довідка, а не керування: не вдалось прочитати, лишаємо
+      // порожнім, вмикач від цього не залежить.
+      setDevices([]);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +125,7 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey?: string }) {
             ? { kind: "on", endpoint: existing.endpoint }
             : { kind: "off" },
         );
+        await refreshDevices(existing?.endpoint);
       } catch (error) {
         if (cancelled) return;
         setState({
@@ -155,6 +191,7 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey?: string }) {
 
       setState({ kind: "on", endpoint: subscription.endpoint });
       setNote("Готово. Надішліть тестове, щоб перевірити.");
+      await refreshDevices(subscription.endpoint);
     } catch (error) {
       setNote(
         `Не вдалося увімкнути: ${
@@ -181,6 +218,7 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey?: string }) {
 
       setState({ kind: "off" });
       setNote("Сповіщення вимкнено на цьому пристрої.");
+      await refreshDevices();
     } finally {
       setBusy(false);
     }
@@ -191,6 +229,18 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey?: string }) {
     setNote(null);
     const result = await sendTestPush();
     setNote(result.message);
+    // Розсилка оновлює `last_ok_at` і прибирає мертві підписки — список має
+    // це показати, інакше «востаннє» лишалось би вчорашнім після перевірки.
+    await refreshDevices(state.kind === "on" ? state.endpoint : undefined);
+    setBusy(false);
+  };
+
+  const forget = async (id: string) => {
+    setBusy(true);
+    setNote(null);
+    const result = await removePushDevice(id);
+    if (!result.ok) setNote(result.message ?? "Не вдалося прибрати пристрій.");
+    await refreshDevices(state.kind === "on" ? state.endpoint : undefined);
     setBusy(false);
   };
 
@@ -242,6 +292,54 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey?: string }) {
         <p role="status" className="mt-3 text-[14px] leading-relaxed text-ink-muted">
           {note}
         </p>
+      )}
+
+      {/* Список пристроїв. Потрібен саме тому, що пуші мовчазні: «не приходить»
+          може означати і мертву підписку, і те, що цей пристрій ніколи й не
+          був підписаний, — а розрізнити це інакше неможливо. */}
+      {devices.length > 0 && (
+        <div className="mt-6 border-t border-line pt-5">
+          <h3 className="text-[14px] text-ink-muted">
+            Підписані пристрої ({devices.length})
+          </h3>
+
+          <ul className="mt-3 space-y-2">
+            {devices.map((device) => (
+              <li
+                key={device.id}
+                className="flex items-center justify-between gap-3"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[14px]">
+                    {device.label}
+                    {device.current && (
+                      <span className="text-ink-muted"> · цей</span>
+                    )}
+                  </span>
+                  <span className="block text-[13px] text-ink-muted">
+                    {device.lastOkAt
+                      ? `Востаннє: ${formatWhen(device.lastOkAt)}`
+                      : "Жодного сповіщення ще не доставлено"}
+                  </span>
+                </span>
+
+                {/* Свій пристрій прибирається вмикачем «Вимкнути»: там
+                    підписка знімається ще й у самому браузері, інакше він
+                    лишиться зареєстрованим і мовчки з'явиться знову. */}
+                {!device.current && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => forget(device.id)}
+                    className="shrink-0 cursor-pointer text-[13px] text-ink-muted transition-colors duration-200 hover:text-ink disabled:cursor-not-allowed"
+                  >
+                    Прибрати
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
