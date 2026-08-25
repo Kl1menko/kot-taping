@@ -8,6 +8,7 @@ import {
   CATEGORIES,
   TONE_CLASS,
   formatPrice,
+  serviceImage,
   serviceMeta,
   type Service,
   type ServiceCategory,
@@ -24,7 +25,7 @@ function ServiceCard({ service }: { service: Service }) {
         className={`relative aspect-[4/5] overflow-hidden rounded-[20px] ${TONE_CLASS[service.tone]}`}
       >
         <Image
-          src={`/images/services/${service.category}.jpg`}
+          src={serviceImage(service)}
           alt=""
           fill
           // Дві колонки на планшеті, три на десктопі — інакше браузер тягнув би

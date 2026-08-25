@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Image from "next/image";
 import { useFormStatus } from "react-dom";
 import {
+  deleteService,
   moveService,
   saveService,
   toggleService,
@@ -237,6 +239,118 @@ function Submit({ editing }: { editing: boolean }) {
   );
 }
 
+/**
+ * Фото картки — вибір файлу з попереднім переглядом.
+ *
+ * Прев'ю робимо через `URL.createObjectURL`, а не читанням у base64: файл до
+ * 5 МБ, і тримати його ще й рядком у стані означало б потроїти пам'ять на
+ * телефоні. Об'єкт-URL звільняємо на зміні файла й на розмонтуванні —
+ * інакше кожен перевибір лишав би копію знімка в пам'яті вкладки.
+ *
+ * Прихований чекбокс `removeImage` — щоб «прибрати фото» відрізнялось від
+ * «фото не чіпали»: у FormData порожній file-інпут виглядає однаково в обох
+ * випадках, і без окремого прапорця сервер не міг би їх розрізнити.
+ */
+function ImageField({
+  current,
+  error,
+}: {
+  current: string | null;
+  error?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [removed, setRemoved] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  const pick = (file: File | null) => {
+    setPreview((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return file ? URL.createObjectURL(file) : null;
+    });
+    // Вибрали нове фото — «прибрати» скасовується само: обидва разом
+    // означали б суперечливу вимогу.
+    if (file) setRemoved(false);
+  };
+
+  const clear = () => {
+    if (inputRef.current) inputRef.current.value = "";
+    pick(null);
+    setRemoved(Boolean(current));
+  };
+
+  const shown = preview ?? (removed ? null : current);
+
+  return (
+    <div>
+      <span className="text-[14px] text-ink-muted">Фото картки</span>
+
+      <div className="mt-2 flex items-start gap-4">
+        <div className="relative aspect-[4/5] w-24 shrink-0 overflow-hidden rounded-2xl bg-canvas">
+          {shown ? (
+            <Image
+              src={shown}
+              alt=""
+              fill
+              sizes="96px"
+              // Прев'ю з `blob:` оптимізатор Next не пропустить — це не URL
+              // з дозволеного списку, — та й оптимізувати локальний файл
+              // немає сенсу.
+              unoptimized={Boolean(preview)}
+              className="object-cover"
+            />
+          ) : (
+            <span className="grid h-full place-items-center px-2 text-center text-[12px] leading-tight text-ink-muted">
+              фото категорії
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <input
+            ref={inputRef}
+            name="image"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/avif"
+            onChange={(e) => pick(e.target.files?.[0] ?? null)}
+            className="block w-full text-[14px] text-ink-muted file:mr-3 file:min-h-[44px] file:cursor-pointer file:rounded-full file:border file:border-[#d4d4d4] file:bg-transparent file:px-4 file:text-[14px] file:text-ink hover:file:border-ink"
+          />
+
+          <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
+            JPG, PNG, WebP або AVIF, до 5 МБ. Найкраще — вертикальний знімок.
+            Без свого фото картка показує спільне фото категорії.
+          </p>
+
+          {shown && (
+            <button
+              type="button"
+              onClick={clear}
+              className="mt-2 cursor-pointer text-[14px] text-[#b3261e] underline-offset-4 hover:underline"
+            >
+              {preview ? "Скасувати вибір" : "Прибрати фото"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {removed && (
+        <input type="hidden" name="removeImage" value="on" />
+      )}
+
+      {error && (
+        <span role="alert" className="mt-1.5 block text-[13px] text-[#b3261e]">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function ServiceForm({
   service,
   onDone,
@@ -246,6 +360,9 @@ function ServiceForm({
 }) {
   const [state, action] = useActionState(saveService, INITIAL);
   const [pending, startTransition] = useTransition();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.status === "success") onDone();
@@ -257,6 +374,25 @@ function ServiceForm({
       await toggleService(service.id, !service.is_active);
       onDone();
     });
+  };
+
+  const remove = async () => {
+    if (!service) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    const result = await deleteService(service.id);
+    if (!result.ok) {
+      // Відмова «за послугою є візити» — очікувана відповідь, а не збій:
+      // показуємо її тут же й лишаємо форму відкритою.
+      setDeleteError(result.message ?? "Не вдалося видалити.");
+      setDeleting(false);
+      setConfirmingDelete(false);
+      return;
+    }
+
+    onDone();
   };
 
   return (
@@ -395,6 +531,11 @@ function ServiceForm({
         </select>
       </label>
 
+      <ImageField
+        current={service?.image_url ?? null}
+        error={state.fieldErrors?.image}
+      />
+
       <label className="flex cursor-pointer items-center gap-2.5 text-[15px]">
         <input
           type="checkbox"
@@ -422,10 +563,54 @@ function ServiceForm({
       </div>
 
       {service && (
-        <p className="text-[13px] leading-relaxed text-ink-muted">
-          Послуги не видаляються — інакше зникла б історія доходу за ними.
-          Прибрана з прайсу послуга просто не пропонується клієнтам.
-        </p>
+        <div className="border-t border-line pt-4">
+          {confirmingDelete ? (
+            <div>
+              <p className="text-[14px] leading-relaxed text-ink-muted">
+                Видалити «{service.title}» назавжди? Цю дію не скасувати. Якщо
+                послуга просто не актуальна — краще прибрати з прайсу.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button tone="light" onClick={() => setConfirmingDelete(false)}>
+                  Скасувати
+                </Button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={remove}
+                  className="min-h-[52px] cursor-pointer rounded-full bg-[#b3261e] px-6 text-[15px] text-white transition-colors duration-200 hover:bg-[#8f1e18] disabled:cursor-wait"
+                >
+                  {deleting ? "Видаляю…" : "Видалити"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setConfirmingDelete(true);
+                }}
+                className="cursor-pointer text-[14px] text-[#b3261e] underline-offset-4 hover:underline"
+              >
+                Видалити послугу
+              </button>
+
+              <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">
+                Видалити можна лише послугу без жодного візиту. За рештою стоїть
+                історія доходу — таку послугу прибирають з прайсу, і вона
+                просто перестає пропонуватись клієнтам.
+              </p>
+            </>
+          )}
+
+          {deleteError && (
+            <p role="alert" className="mt-3 text-[14px] leading-relaxed text-[#b3261e]">
+              {deleteError}
+            </p>
+          )}
+        </div>
       )}
     </form>
   );

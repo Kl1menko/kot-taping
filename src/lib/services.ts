@@ -28,6 +28,12 @@ export type Service = {
   category: ServiceCategory;
   /** Фон медіа-блоку картки. */
   tone: "sand" | "clay" | "blush";
+  /**
+   * Власне фото картки, завантажене в адмінці. Порожньо — картка бере
+   * знімок категорії з /public, як було до появи цього поля; саме тому
+   * жоден рядок нижче його не задає.
+   */
+  image?: string;
 };
 
 export const CATEGORIES: { id: ServiceCategory; label: string }[] = [
@@ -330,6 +336,18 @@ export const TONE_CLASS: Record<Service["tone"], string> = {
 export function formatPrice(service: Pick<Service, "price" | "priceFrom">) {
   const value = `${service.price.toLocaleString("uk-UA")} ₴`;
   return service.priceFrom ? `від ${value}` : value;
+}
+
+/**
+ * Знімок для картки послуги.
+ *
+ * Спершу власне фото з адмінки, далі — спільний знімок категорії з /public.
+ * Відкат тут не запасний варіант «на випадок помилки», а робочий стан: фото
+ * задається послугам поступово, і категорійний знімок лишається нормальним
+ * виглядом для тих, кому власного ще не підібрали.
+ */
+export function serviceImage(service: Pick<Service, "image" | "category">) {
+  return service.image || `/images/services/${service.category}.jpg`;
 }
 
 /** Правий підпис у блоці опису: тривалість носіння або формат. */

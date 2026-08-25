@@ -27,6 +27,21 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * Хост Supabase зі змінної оточення — без падіння, якщо її не задано:
+ * `next.config` читається і там, де бази немає (лінт, аналіз бандла), а
+ * валити збірку через відсутню картинку було б надмірно.
+ */
+const supabaseHost = (() => {
+  try {
+    return process.env.SUPABASE_URL
+      ? new URL(process.env.SUPABASE_URL).hostname
+      : null;
+  } catch {
+    return null;
+  }
+})();
+
 const nextConfig: NextConfig = {
   images: {
     // AVIF перший: на фото він дає помітно менший файл за WebP при тій самій
@@ -37,6 +52,25 @@ const nextConfig: NextConfig = {
     // тож нова версія отримає нову адресу. Рік у кеші економить повторні
     // перекодування й раунди до сервера.
     minimumCacheTTL: 31536000,
+    /**
+     * Фото послуг лежать у Supabase Storage (міграція 0015), тож `next/image`
+     * має право їх оптимізувати. Хост беремо зі `SUPABASE_URL` — прибивати
+     * конкретний проєкт у конфіг не можна: у dev, staging і проді він різний.
+     *
+     * Шлях звужено до публічних об'єктів саме нашого bucket: ширший патерн
+     * зробив би з оптимізатора відкритий проксі для будь-якої адреси на тому
+     * хості. Змінної немає (збірка без бази) — список лишається порожнім і
+     * зовнішні знімки просто не проходять, що чесніше за мовчазний доступ.
+     */
+    remotePatterns: supabaseHost
+      ? [
+          {
+            protocol: "https" as const,
+            hostname: supabaseHost,
+            pathname: "/storage/v1/object/public/service-images/**",
+          },
+        ]
+      : [],
   },
 
   async headers() {

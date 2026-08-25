@@ -20,6 +20,12 @@ export type ServiceRow = {
   badge: string | null;
   category: string;
   tone: "sand" | "clay" | "blush";
+  /**
+   * Фото картки — публічний URL із bucket `service-images` (міграція 0015).
+   * `null` означає «фото не задане»: вітрина тоді бере знімок категорії з
+   * /public, як було до появи цієї колонки.
+   */
+  image_url: string | null;
   duration_min: number;
   sort: number;
   is_active: boolean;

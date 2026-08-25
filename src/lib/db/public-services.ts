@@ -32,7 +32,9 @@ export async function listPublicServices(): Promise<Service[]> {
   try {
     const { data, error } = await db()
       .from("services")
-      .select("slug, title, summary, price, price_from, wear, badge, category, tone, sort")
+      .select(
+        "slug, title, summary, price, price_from, wear, badge, category, tone, image_url, sort",
+      )
       .eq("is_active", true)
       .order("sort");
 
@@ -51,6 +53,7 @@ export async function listPublicServices(): Promise<Service[]> {
         ...(row.price_from ? { priceFrom: true } : {}),
         ...(row.wear ? { wear: row.wear } : {}),
         ...(row.badge ? { badge: row.badge } : {}),
+        ...(row.image_url ? { image: row.image_url } : {}),
         category: row.category as ServiceCategory,
         tone: row.tone,
       }));
