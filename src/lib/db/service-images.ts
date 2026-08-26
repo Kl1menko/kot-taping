@@ -1,5 +1,6 @@
 import "server-only";
 
+import sharp from "sharp";
 import { db } from "./client";
 import { env } from "@/lib/env";
 
@@ -28,6 +29,26 @@ const ALLOWED = new Map<string, string>([
  * проганяти фото через конвертер, перш ніж завантажити.
  */
 const MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * До якого розміру стискаємо перед сховищем.
+ *
+ * Картка показує знімок максимум у 640 CSS-пікселів, тож 1200 покриває навіть
+ * екран із подвійною щільністю з запасом. Усе вище — мертва вага: `next/image`
+ * усе одно зменшить його при першому запиті, але робитиме це з
+ * восьмимегапіксельного оригіналу, і кожна нова ширина коштуватиме секунди
+ * процесорного часу на сервері.
+ *
+ * WebP, а не AVIF: кодується в рази швидше (майстриня чекає на відповідь
+ * форми), а `next/image` однаково перекодує його в AVIF для тих, хто вміє.
+ * Це проміжний формат для сховища, а не той, що поїде відвідувачу.
+ *
+ * `withoutEnlargement` — щоб маленький знімок не розтягувало до 1200 і не
+ * псувало різкість; `rotate()` без аргументів застосовує EXIF-орієнтацію,
+ * інакше фото з телефона лягає боком.
+ */
+const STORED_WIDTH = 1200;
+const STORED_QUALITY = 82;
 
 export type UploadResult =
   | { ok: true; url: string }
@@ -88,17 +109,60 @@ export async function uploadServiceImage(
   // підстраховуємось: ключ об'єкта не має містити нічого, крім безпечних
   // символів, інакше адреса поїде в екранування.
   const safe = slug.replace(/[^a-z0-9-]/g, "").slice(0, 60) || "service";
-  const path = `${safe}-${Date.now()}.${ext}`;
+
+  const prepared = await compress(file);
+  const path = `${safe}-${Date.now()}.${prepared.ext}`;
 
   const { error } = await db()
     .storage.from(BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, prepared.body, {
+      contentType: prepared.type,
+      upsert: false,
+    });
 
   if (error) {
     return { ok: false, message: `Не вдалося завантажити фото: ${error.message}` };
   }
 
   return { ok: true, url: publicUrl(path) };
+}
+
+/**
+ * Зменшити знімок перед сховищем.
+ *
+ * Майстриня вантажить фото прямо з телефона — 4000×3000 і кілька мегабайт. У
+ * сховищі така роздільність нікому не потрібна: картка показує 640 пікселів,
+ * а `next/image` усе одно віддає зменшену копію. Але вихідник він тримає як
+ * джерело, і кожна нова ширина перекодовується саме з нього.
+ *
+ * Помилка стиснення не має зривати завантаження: якщо sharp не впорався з
+ * форматом, кладемо файл як є — краще важчий знімок, ніж жодного.
+ */
+async function compress(file: File) {
+  const original = {
+    body: file,
+    type: file.type,
+    ext: ALLOWED.get(file.type)!,
+  };
+
+  try {
+    const input = Buffer.from(await file.arrayBuffer());
+    const body = await sharp(input)
+      // Без аргументів — застосовує поворот із EXIF: фото з телефона інакше
+      // лягає боком, бо орієнтація живе в метаданих, а не в пікселях.
+      .rotate()
+      .resize({ width: STORED_WIDTH, withoutEnlargement: true })
+      .webp({ quality: STORED_QUALITY })
+      .toBuffer();
+
+    // Стиснення дало більший файл (уже оптимізований webp/avif на вході) —
+    // лишаємо оригінал, інакше ми б погіршили те, що й так було добре.
+    if (body.byteLength >= file.size) return original;
+
+    return { body, type: "image/webp", ext: "webp" };
+  } catch {
+    return original;
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useBookingModal } from "./booking-modal";
@@ -135,7 +135,55 @@ export function Services({
   const [active, setActive] = useState<ServiceCategory | null>(
     categories[0]?.id ?? null,
   );
-  const visible = services.filter((s) => s.category === active);
+  /**
+   * Панель кожної категорії лишається в DOM — ховаємо неактивні через CSS.
+   *
+   * Раніше рендерилась тільки активна, тож при кліку картки монтувались
+   * уперше, і фото починали вантажитись аж у цю мить: людина бачила порожні
+   * плитки. Тепер розмітка готова заздалегідь, лишається дати браузеру
+   * привід узятись за знімки — цим займається `warm` нижче.
+   *
+   * `hidden` знімає панель і з дерева доступності — читач з екрана бачить
+   * рівно те саме, що й раніше.
+   */
+  const panels = categories.map((cat) => ({
+    id: cat.id,
+    items: services.filter((s) => s.category === cat.id),
+  }));
+
+  // Які категорії вже грілися. `useRef`, а не звичайний Set: він має пережити
+  // рендер, інакше кожне наведення слало б ті самі запити наново.
+  const warmed = useRef<Set<string>>(new Set());
+
+  /**
+   * Гріємо знімки категорії ще до кліку.
+   *
+   * `loading="lazy"` у прихованій панелі браузер не виконує — картинка
+   * лишається незавантаженою, поки панель не покажуть. Тому просимо її
+   * заздалегідь окремим `Image()`: відповідь лягає в кеш HTTP, і клік по
+   * вкладці показує фото миттєво.
+   *
+   * Момент — наведення й фокус: до кліку лишаються сотні мілісекунд, яких
+   * вистачає на 10 КБ AVIF, а на телефоні `touchstart` спрацьовує ще до
+   * того, як палець відпустили.
+   *
+   * Адресу будуємо через `/_next/image` — саме її запитує картка. Гріти
+   * оригінальний `.jpg` було б марно: він лежить за іншим URL, і кеш для
+   * нього картці не допоміг би.
+   *
+   * `w=640` покриває картку на всіх брейкпоінтах при DPR 1–2; інші ширини
+   * браузер дотягне сам, якщо знадобиться. `q=75` — типове для Next.
+   */
+  const warm = (category: ServiceCategory) => {
+    if (warmed.current.has(category)) return;
+    warmed.current.add(category);
+
+    for (const service of services.filter((s) => s.category === category)) {
+      const src = encodeURIComponent(serviceImage(service));
+      const img = new window.Image();
+      img.src = `/_next/image?url=${src}&w=640&q=75`;
+    }
+  };
 
   if (categories.length === 0) return null;
 
@@ -177,6 +225,9 @@ export function Services({
                 aria-controls="services-panel"
                 id={`tab-${cat.id}`}
                 onClick={() => setActive(cat.id)}
+                onMouseEnter={() => warm(cat.id)}
+                onFocus={() => warm(cat.id)}
+                onTouchStart={() => warm(cat.id)}
                 className={[
                   "inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-5 text-[15px]",
                   "cursor-pointer transition-colors duration-200",
@@ -195,22 +246,31 @@ export function Services({
         </div>
       </div>
 
-      <div
-        id="services-panel"
-        role="tabpanel"
-        aria-labelledby={`tab-${active}`}
-        className="mt-12 flex flex-wrap justify-start gap-5"
-      >
-        {visible.map((service, i) => (
-          <div
-            key={service.slug}
-            className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
-          >
-            {/* Три перші — рівно один ряд на десктопі. */}
-            <ServiceCard service={service} t={t} eager={i < 3} />
-          </div>
-        ))}
-      </div>
+      {panels.map((panel) => (
+        <div
+          key={panel.id}
+          id={panel.id === active ? "services-panel" : undefined}
+          role="tabpanel"
+          aria-labelledby={`tab-${panel.id}`}
+          hidden={panel.id !== active}
+          className="mt-12 flex flex-wrap justify-start gap-5"
+        >
+          {panel.items.map((service, i) => (
+            <div
+              key={service.slug}
+              className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
+            >
+              {/* Перший ряд активної вкладки — без відкладення; решта
+                  вантажиться лінькаво, коли браузер звільниться. */}
+              <ServiceCard
+                service={service}
+                t={t}
+                eager={panel.id === active && i < 3}
+              />
+            </div>
+          ))}
+        </div>
+      ))}
 
       {/* Посилання на сторінку активної категорії.
 
