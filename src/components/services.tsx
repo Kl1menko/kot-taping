@@ -17,6 +17,21 @@ import { Card, Container, SectionLabel } from "./ui";
 import type { Dictionary } from "@/lib/dictionary";
 import { localePath, type Locale } from "@/lib/i18n";
 
+/**
+ * Ширини картки й правило вибору — одні для самої картки і для прогріву.
+ *
+ * Розійдись вони, і прогрів тягнув би варіант, якого картка ніколи не
+ * попросить: користь зникає, а трафік лишається.
+ *
+ * Список — те, що Next реально кладе в `srcset` для цього `sizes`: він бере
+ * `imageSizes` + `deviceSizes` із `next.config.ts` і відкидає ширини, дрібніші
+ * за найменший можливий розмір картки (128 і 200 сюди не потрапляють — навіть
+ * на вузькому екрані картка ширша). Значення звірені з розміткою, а не
+ * переписані з конфіга.
+ */
+const CARD_SIZES = "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw";
+const CARD_WIDTHS = [256, 300, 400, 640, 750, 828, 1080];
+
 function ServiceCard({
   service,
   t,
@@ -41,7 +56,7 @@ function ServiceCard({
           fill
           // Дві колонки на планшеті, три на десктопі — інакше браузер тягнув би
           // повнорозмірний файл під картку в 400px.
-          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          sizes={CARD_SIZES}
           /**
            * Перший ряд карток вантажимо одразу.
            *
@@ -167,21 +182,25 @@ export function Services({
    * вистачає на 10 КБ AVIF, а на телефоні `touchstart` спрацьовує ще до
    * того, як палець відпустили.
    *
-   * Адресу будуємо через `/_next/image` — саме її запитує картка. Гріти
-   * оригінальний `.jpg` було б марно: він лежить за іншим URL, і кеш для
-   * нього картці не допоміг би.
+   * Ширину не вгадуємо: задаємо той самий `srcset` і `sizes`, що й у картці,
+   * і браузер вибирає з них рівно те, що потім запросить сама картка. Зашите
+   * число тут промахувалось би саме там, де прогрів найпотрібніший — на
+   * телефоні картка займає всю ширину, і при DPR 2 береться 828, а не 640.
    *
-   * `w=640` покриває картку на всіх брейкпоінтах при DPR 1–2; інші ширини
-   * браузер дотягне сам, якщо знадобиться. `q=75` — типове для Next.
+   * Адреси ведуть через `/_next/image`: оригінальний файл лежить за іншим
+   * URL, і його кеш картці нічого не дає.
    */
   const warm = (category: ServiceCategory) => {
-    if (warmed.current.has(category)) return;
+    if (category === active || warmed.current.has(category)) return;
     warmed.current.add(category);
 
     for (const service of services.filter((s) => s.category === category)) {
-      const src = encodeURIComponent(serviceImage(service));
+      const url = encodeURIComponent(serviceImage(service));
       const img = new window.Image();
-      img.src = `/_next/image?url=${src}&w=640&q=75`;
+      img.sizes = CARD_SIZES;
+      img.srcset = CARD_WIDTHS.map(
+        (w) => `/_next/image?url=${url}&w=${w}&q=75 ${w}w`,
+      ).join(", ");
     }
   };
 
@@ -222,7 +241,7 @@ export function Services({
                 role="tab"
                 type="button"
                 aria-selected={selected}
-                aria-controls="services-panel"
+                aria-controls={`panel-${cat.id}`}
                 id={`tab-${cat.id}`}
                 onClick={() => setActive(cat.id)}
                 onMouseEnter={() => warm(cat.id)}
@@ -246,10 +265,10 @@ export function Services({
         </div>
       </div>
 
-      {panels.map((panel) => (
+      {panels.map((panel, panelIndex) => (
         <div
           key={panel.id}
-          id={panel.id === active ? "services-panel" : undefined}
+          id={`panel-${panel.id}`}
           role="tabpanel"
           aria-labelledby={`tab-${panel.id}`}
           hidden={panel.id !== active}
@@ -260,12 +279,16 @@ export function Services({
               key={service.slug}
               className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
             >
-              {/* Перший ряд активної вкладки — без відкладення; решта
-                  вантажиться лінькаво, коли браузер звільниться. */}
+              {/* Перший ряд першої вкладки — без відкладення.
+
+                  Умова навмисно про `index`, а не про активність панелі:
+                  атрибут `loading` браузер читає при монтуванні, і зміна
+                  lazy→eager після кліку вже нічого не робить. Фото решти
+                  вкладок готує `warm` — вони приходять із кешу. */}
               <ServiceCard
                 service={service}
                 t={t}
-                eager={panel.id === active && i < 3}
+                eager={panelIndex === 0 && i < 3}
               />
             </div>
           ))}

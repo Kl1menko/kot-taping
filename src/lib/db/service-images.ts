@@ -147,19 +147,48 @@ async function compress(file: File) {
 
   try {
     const input = Buffer.from(await file.arrayBuffer());
-    const body = await sharp(input)
+
+    /**
+     * `limitInputPixels` — межа на РОЗПАКОВАНЕ зображення.
+     *
+     * П'ятимегабайтний ліміт вище стосується файлу на дроті, а не картинки в
+     * пам'яті: сильно стиснений PNG на 30 000 × 30 000 важить одиниці
+     * мегабайт, але розгортається в мільярд пікселів і кілька гігабайтів. Це
+     * не виняток, який зловить `catch`, — процес просто вбиває OOM.
+     *
+     * 50 Мп із запасом покриває будь-яку камеру, з якої знімають для сайту.
+     */
+    const pipeline = sharp(input, { limitInputPixels: 50_000_000 })
       // Без аргументів — застосовує поворот із EXIF: фото з телефона інакше
       // лягає боком, бо орієнтація живе в метаданих, а не в пікселях.
-      .rotate()
+      .rotate();
+
+    const body = await pipeline
+      .clone()
       .resize({ width: STORED_WIDTH, withoutEnlargement: true })
       .webp({ quality: STORED_QUALITY })
       .toBuffer();
 
-    // Стиснення дало більший файл (уже оптимізований webp/avif на вході) —
-    // лишаємо оригінал, інакше ми б погіршили те, що й так було добре.
-    if (body.byteLength >= file.size) return original;
+    if (body.byteLength < file.size) {
+      return { body, type: "image/webp", ext: "webp" };
+    }
 
-    return { body, type: "image/webp", ext: "webp" };
+    /**
+     * WebP вийшов не меншим — на вході вже оптимізований знімок, і
+     * перекодування лише погіршило б його.
+     *
+     * Але просто повернути файл недоторканим можна тільки тоді, коли в ньому
+     * немає EXIF-повороту: інакше ми віддамо у сховище знімок, що ляже боком.
+     * Тому дивимось на `orientation` — і перекодовуємо лише коли поворот
+     * справді потрібен. Розмір тут другорядний: криво показане фото гірше за
+     * кілька зайвих кілобайтів, а «просто повернути» без перекодування
+     * неможливо — орієнтація живе в метаданих, які браузер уже ігнорує.
+     */
+    const { orientation } = await sharp(input).metadata();
+    if (!orientation || orientation === 1) return original;
+
+    const rotated = await pipeline.clone().toBuffer();
+    return { body: rotated, type: file.type, ext: original.ext };
   } catch {
     return original;
   }
