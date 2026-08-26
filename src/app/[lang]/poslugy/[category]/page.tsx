@@ -109,6 +109,7 @@ export default async function CategoryPage(
 
       <PageShell services={all} schedule={schedule} t={t} locale={lang}>
         <PageHero
+          trailLabel={t.a11y.breadcrumbs}
           eyebrow={label}
           title={seo.heading}
           lead={seo.intro}

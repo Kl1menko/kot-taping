@@ -75,6 +75,7 @@ export default async function CityPage(
 
       <PageShell services={services} schedule={schedule} t={t} locale={lang}>
         <PageHero
+          trailLabel={t.a11y.breadcrumbs}
           eyebrow={place.city}
           title={tc.heroTitle.replace("{locative}", place.locative)}
           lead={place.intro}

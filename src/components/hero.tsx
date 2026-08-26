@@ -38,7 +38,7 @@ export function Hero({ t, locale }: { t: Dictionary; locale: Locale }) {
 
         {/* Right: video block, full-bleed to the screen edge */}
         <div className="relative min-h-[420px] overflow-hidden bg-sand lg:min-h-0">
-          <HeroVideo />
+          <HeroVideo t={t} />
 
           {/* Scrim so the caption stays legible over any frame */}
           <div

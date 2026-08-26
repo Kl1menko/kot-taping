@@ -14,9 +14,14 @@ import type { Dictionary } from "../dictionary.ts";
  */
 export const en = {
   a11y: {
+    breadcrumbs: "Breadcrumb",
+    videoAlt: "A lymphatic drainage taping session in the studio",
+    pauseVideo: "Pause video",
+    playVideo: "Play video",
     skipToContent: "Skip to content",
   },
   meta: {
+    business: "A studio for aesthetic and lymphatic drainage taping of face and body.",
     home: {
       title: "Kotova Taping — aesthetic taping studio in Lviv and Kyiv",
       description:
@@ -230,6 +235,58 @@ export const en = {
     sentFlagged:
       "Request received. You flagged a condition we need to discuss before " +
       "the treatment — I will write to you to go through the details.",
+  },
+  kitForm: {
+    delivery: "Delivery",
+    deliveryTo: "Where to send it",
+    sectionLabel: "Home taping",
+    sectionTitle: "A kit for taping at home",
+    sectionText:
+      "A ready kit with tape cut for your area and a video guide: how to " +
+      "apply it, how to remove it, which exercises to add. Sent by post — " +
+      "within Ukraine and abroad.",
+    orderCta: "Order a kit",
+    orDirect: "or message me directly",
+    orderAria: "Order the “{kit}” kit",
+    kitLabel: "Kit",
+    close: "Close",
+    name: "Name",
+    phone: "Phone",
+    instagram: "Instagram handle",
+    telegram: "Telegram handle",
+    tapeColor: "Tape colour",
+    measurements: "Your measurements, cm",
+    measurementsHint:
+      "Needed so the tape is cut for your face. I will talk you through what " +
+      "to measure in chat if you are unsure.",
+    measurementsPlaceholder: "For example: forehead width 14, face length 19",
+    country: "Country",
+    countryDefault: "Ukraine",
+    countryHint:
+      "For delivery abroad I will work out the cost separately and tell you before payment.",
+    city: "City",
+    cityHint:
+      "I will take the exact address and pickup point in chat once the order is confirmed.",
+    note: "Comment (optional)",
+    submit: "Order the kit",
+    submitting: "Sending…",
+    sentTitle: "Order received",
+    urgent: "If it is urgent, message me directly:",
+  },
+  calendar: {
+    noDates:
+      "There are no free dates in the near future. Message me on Telegram or " +
+      "Instagram and we will find a time.",
+    chosen: "Chosen",
+    hint: "Available dates are highlighted — pick one that suits you.",
+    pickLocation: "Choose a studio and I will show the dates open there.",
+    // Тиждень усе одно починається з понеділка — це графік студії, а не
+    // культурна умовність, тож порядок однаковий в обох мовах.
+    weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    prevMonth: "Previous month",
+    nextMonth: "Next month",
+    pickDate: "Choose a date",
+    unavailable: "unavailable",
   },
   nav: {
     services: "Services",

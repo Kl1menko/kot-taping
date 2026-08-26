@@ -13,6 +13,7 @@ import { BookingForm } from "./booking-form";
 import type { Service } from "@/lib/services";
 import type { WorkingDay } from "@/lib/schedule";
 import type { Dictionary } from "@/lib/dictionary";
+import type { Locale } from "@/lib/i18n";
 
 type BookingModalContext = {
   /** Opens the sheet, optionally preselecting a service by slug. */
@@ -35,9 +36,11 @@ export function BookingModalProvider({
   services,
   schedule = {},
   t,
+  locale,
 }: {
   children: ReactNode;
   t: Dictionary;
+  locale: Locale;
   /** Прайс із бази — той самий список, що й у картках послуг. */
   services: Service[];
   /** Робочі дні по кабінетах: slug → відкриті дні. Порожньо — запис закрито. */
@@ -162,6 +165,7 @@ export function BookingModalProvider({
                   onDone={close}
                   fullWidthSubmit
                   t={t}
+                  locale={locale}
                 />
               </div>
             </div>

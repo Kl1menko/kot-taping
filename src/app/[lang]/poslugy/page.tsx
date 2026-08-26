@@ -106,6 +106,7 @@ export default async function ServicesCatalog({
 
       <PageShell services={services} schedule={schedule} t={t} locale={lang}>
         <PageHero
+          trailLabel={t.a11y.breadcrumbs}
           eyebrow={tp.eyebrow}
           title={tp.title}
           lead={tp.lead}

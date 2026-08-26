@@ -39,7 +39,12 @@ export function PageShell({
   schedule?: Record<string, WorkingDay[]>;
 }) {
   return (
-    <BookingModalProvider services={services} schedule={schedule} t={t}>
+    <BookingModalProvider
+      services={services}
+      schedule={schedule}
+      t={t}
+      locale={locale}
+    >
       {/* Шапка на своєму тлі, без лінії знизу: герой під нею білий, і межа
           між ними була б рискою впоперек порожнього місця. */}
       <Card as="div">

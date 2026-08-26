@@ -23,13 +23,16 @@ export function Sheet({
   open,
   onClose,
   title,
-  eyebrow = "Набір",
+  eyebrow,
+  closeLabel,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
-  eyebrow?: string;
+  /** Надрядок над заголовком — приходить зі словника мови сторінки. */
+  eyebrow: string;
+  closeLabel: string;
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -117,7 +120,7 @@ export function Sheet({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Закрити"
+              aria-label={closeLabel}
               className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-canvas text-ink transition-colors duration-200 hover:bg-line"
             >
               <svg

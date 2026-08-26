@@ -81,14 +81,13 @@ function departmentId(slug: string) {
  * Сам бізнес. `HealthAndBeautyBusiness` — підтип `LocalBusiness`, саме він
  * дає право на локальну картку у видачі.
  */
-function businessNode() {
+function businessNode(locale: Locale) {
   return {
     "@type": "HealthAndBeautyBusiness",
     "@id": BUSINESS_ID,
     name: SITE_NAME,
     url: SITE_URL,
-    description:
-      "Студія естетичного та лімфодренажного тейпування обличчя і тіла.",
+    description: getDictionary(locale).meta.business,
     email: CONTACTS.email,
     telephone: CONTACTS.phone,
     image: `${SITE_URL}/opengraph-image`,
@@ -227,7 +226,7 @@ export function StructuredData({
   return (
     <JsonLd
       graph={[
-        businessNode(),
+        businessNode(locale),
         websiteNode(locale),
         { ...catalog, provider: { "@id": BUSINESS_ID } },
         faqNode(locale),
@@ -305,7 +304,7 @@ export function CatalogStructuredData({
           "@type": "CollectionPage",
           "@id": `${url}#page`,
           url,
-          name: "Послуги та ціни",
+          name: getDictionary(locale).pages.services.eyebrow,
           inLanguage: JSONLD_LANG[locale],
           isPartOf: { "@id": WEBSITE_ID },
           about: { "@id": BUSINESS_ID },

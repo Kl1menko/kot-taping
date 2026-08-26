@@ -83,14 +83,12 @@ export function Kits({ kits, t }: { kits: Kit[]; t: Dictionary }) {
     <Card as="section" id="kits" tone="canvas">
       <div className="px-5 py-16 md:px-14 md:py-20 lg:px-[var(--gutter-edge-lg)]">
         <div className="max-w-[52ch]">
-          <SectionLabel>Самотейпування</SectionLabel>
+          <SectionLabel>{t.kitForm.sectionLabel}</SectionLabel>
           <h2 className="mt-8 text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]">
-            Набір для тейпування вдома
+            {t.kitForm.sectionTitle}
           </h2>
           <p className="mt-6 text-[16px] leading-relaxed text-ink-muted">
-            Готовий набір із тейпом, розкроєним під вашу зону, і відео-інструкцією:
-            як наносити, як знімати, які вправи додати. Надсилаю поштою — по
-            Україні та за кордон.
+            {t.kitForm.sectionText}
           </p>
         </div>
 
@@ -119,7 +117,7 @@ export function Kits({ kits, t }: { kits: Kit[]; t: Dictionary }) {
               <button
                 type="button"
                 onClick={() => setOpenKit(kit.slug)}
-                aria-label={`Замовити набір «${kit.title}»`}
+                aria-label={t.kitForm.orderAria.replace("{kit}", kit.title)}
                 className={[
                   "group flex h-full w-full cursor-pointer flex-col rounded-[26px] bg-surface p-3 text-left",
                   "transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-soft)]",
@@ -187,13 +185,13 @@ export function Kits({ kits, t }: { kits: Kit[]; t: Dictionary }) {
             onClick={() => setOpenKit(kits[0].slug)}
             className="min-h-[56px] cursor-pointer rounded-full bg-ink px-8 text-[15px] text-white transition-colors duration-200 hover:bg-[#2a2a2a]"
           >
-            Замовити набір
+            {t.kitForm.orderCta}
           </button>
 
           {/* Спосіб 1 з маршруту: хто не любить форми — пише напряму. */}
           <div className="flex items-center gap-3">
             <span className="text-[15px] text-ink-muted">
-              або напишіть напряму
+              {t.kitForm.orDirect}
             </span>
             <nav aria-label={t.nav.socials} className="flex gap-2">
               {SOCIALS.filter((s) => s.id !== "facebook").map((s) => (
@@ -217,9 +215,11 @@ export function Kits({ kits, t }: { kits: Kit[]; t: Dictionary }) {
         open={openKit !== null}
         onClose={() => setOpenKit(null)}
         title={t.kits.orderTitle}
+        eyebrow={t.kitForm.kitLabel}
+        closeLabel={t.kitForm.close}
       >
         {openKit && (
-          <KitForm
+          <KitForm t={t}
             kits={kits}
             preselected={openKit}
             onDone={() => setOpenKit(null)}

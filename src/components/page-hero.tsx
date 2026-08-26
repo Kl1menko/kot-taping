@@ -26,8 +26,11 @@ export function PageHero({
   trail,
   media,
   children,
+  trailLabel,
 }: {
   eyebrow: string;
+  /** Підпис хлібних крихт для читачів з екрана — мовою сторінки. */
+  trailLabel: string;
   title: ReactNode;
   lead: ReactNode;
   trail: { name: string; path: string }[];
@@ -42,7 +45,7 @@ export function PageHero({
         className={`grid ${media ? "lg:grid-cols-[1.05fr_0.95fr]" : ""}`}
       >
         <div className="flex flex-col justify-center px-5 pb-14 pt-8 md:px-10 md:pb-20 md:pt-10 lg:pl-[var(--gutter-edge-sm)]">
-          <Breadcrumbs trail={trail} />
+          <Breadcrumbs trail={trail} label={trailLabel} />
 
           <div className="mt-10">
             <Eyebrow>{eyebrow}</Eyebrow>

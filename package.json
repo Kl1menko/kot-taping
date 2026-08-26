@@ -12,7 +12,8 @@
     "test:tz": "TZ=UTC node --test --experimental-strip-types --no-warnings \"src/**/*.tz.test.ts\"",
     "admin:hash": "node scripts/hash-password.mjs",
     "db:seed": "node --experimental-strip-types --no-warnings scripts/seed.mjs",
-    "db:demo": "node scripts/seed-demo.mjs"
+    "db:demo": "node scripts/seed-demo.mjs",
+    "db:seed-en": "node scripts/seed-en.mjs"
   },
   "dependencies": {
     "@next/third-parties": "^16.3.1",

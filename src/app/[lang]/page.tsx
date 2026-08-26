@@ -67,7 +67,12 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
   ]);
 
   return (
-    <BookingModalProvider services={services} schedule={schedule} t={t}>
+    <BookingModalProvider
+      services={services}
+      schedule={schedule}
+      t={t}
+      locale={lang}
+    >
       <StructuredData services={services} locale={lang} />
       <main id="main" className="pb-24 md:pb-0">
         <Hero t={t} locale={lang} />

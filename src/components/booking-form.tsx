@@ -8,6 +8,7 @@ import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 import { INPUT_CLS } from "@/lib/form";
 import { cityLabel, type Dictionary } from "@/lib/dictionary";
+import type { Locale } from "@/lib/i18n";
 import { DatePicker } from "./date-picker";
 import {
   formatTime,
@@ -177,8 +178,11 @@ export function BookingForm({
   onDone,
   fullWidthSubmit,
   t,
+  locale,
 }: {
   t: Dictionary;
+  /** Потрібна календарю: назви місяців і формат дати залежать від мови. */
+  locale: Locale;
   /** Прайс із бази: у списку лише те, на що справді можна записатись. */
   services: Service[];
   /**
@@ -424,6 +428,8 @@ export function BookingForm({
           }}
           invalid={Boolean(state.fieldErrors?.date)}
           awaitingLocation={!location}
+          t={t}
+          locale={locale}
         />
       </Field>
 

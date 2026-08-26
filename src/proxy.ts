@@ -63,6 +63,8 @@ export function proxy(request: NextRequest) {
       maxAge: LOCALE_COOKIE_MAX_AGE,
       sameSite: "lax",
     });
+    // Ця відповідь несе персональну cookie — CDN не має роздавати її іншим.
+    response.headers.set("Cache-Control", "no-store");
     return response;
   }
 
@@ -84,7 +86,11 @@ export function proxy(request: NextRequest) {
         : localeFromAcceptLanguage(request.headers.get("accept-language"));
 
     if (locale !== DEFAULT_LOCALE) {
-      return NextResponse.redirect(new URL("/en", request.url));
+      const response = NextResponse.redirect(new URL("/en", request.url));
+      // Рішення залежить від cookie та Accept-Language цього відвідувача —
+      // спільний кеш віддавав би чужий вибір усім наступним.
+      response.headers.set("Cache-Control", "no-store");
+      return response;
     }
   }
 

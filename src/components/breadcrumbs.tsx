@@ -13,11 +13,14 @@ import Link from "next/link";
  */
 export function Breadcrumbs({
   trail,
+  label,
 }: {
   trail: { name: string; path: string }[];
+  /** Підпис навігації для читачів з екрана — мовою сторінки. */
+  label: string;
 }) {
   return (
-    <nav aria-label="Навігаційний ланцюжок">
+    <nav aria-label={label}>
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-ink-muted">
         {trail.map((item, i) => {
           const last = i === trail.length - 1;

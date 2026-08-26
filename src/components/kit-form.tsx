@@ -6,6 +6,7 @@ import { submitKitOrder, type KitOrderState } from "@/app/kit-actions";
 import { SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 import { INPUT_CLS } from "@/lib/form";
+import type { Dictionary } from "@/lib/dictionary";
 import {
   CONTACT_CHANNELS,
   TAPE_COLORS,
@@ -64,7 +65,7 @@ function Field({
   );
 }
 
-function SubmitButton() {
+function SubmitButton({ t }: { t: Dictionary }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -72,7 +73,7 @@ function SubmitButton() {
       disabled={pending}
       className="min-h-[56px] w-full cursor-pointer rounded-full bg-ink px-8 text-[15px] text-white transition-colors duration-200 hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {pending ? "Надсилаю…" : "Замовити набір"}
+      {pending ? t.kitForm.submitting : t.kitForm.submit}
     </button>
   );
 }
@@ -81,10 +82,12 @@ export function KitForm({
   kits,
   preselected,
   onDone,
+  t,
 }: {
   kits: Kit[];
   preselected?: string;
   onDone?: () => void;
+  t: Dictionary;
 }) {
   const [state, action] = useActionState(submitKitOrder, INITIAL);
 
@@ -101,7 +104,12 @@ export function KitForm({
   const [channel, setChannel] = useState<ContactChannel>(
     isContactChannel(sent?.channel ?? "") ? (sent!.channel as ContactChannel) : "telegram",
   );
-  const [country, setCountry] = useState<string>(sent?.country || "Україна");
+  // Значення країни лишається українським рядком і в англійській версії:
+  // воно йде в базу й у повідомлення майстрині, тож має бути однаковим
+  // незалежно від мови, якою його обрали.
+  const [country, setCountry] = useState<string>(
+    sent?.country || DELIVERY_COUNTRIES[0],
+  );
 
   const kit = kits.find((k) => k.slug === kitSlug);
 
@@ -138,7 +146,7 @@ export function KitForm({
         </span>
 
         <h3 className="mt-7 text-[26px] leading-tight sm:text-[30px]">
-          Замовлення прийнято
+          {t.kitForm.sentTitle}
         </h3>
         <p className="mx-auto mt-3 max-w-[38ch] text-[16px] leading-relaxed text-ink-muted">
           {state.message}
@@ -146,9 +154,9 @@ export function KitForm({
 
         <div className="mx-auto mt-6 max-w-[38ch] rounded-2xl bg-canvas px-5 py-4">
           <p className="text-[15px] leading-relaxed text-ink-muted">
-            Якщо питання термінове — напишіть напряму:
+            {t.kitForm.urgent}
           </p>
-          <nav aria-label="Соцмережі" className="mt-3 flex justify-center gap-2">
+          <nav aria-label={t.nav.socials} className="mt-3 flex justify-center gap-2">
             {SOCIALS.map((s) => (
               <a
                 key={s.id}
@@ -227,7 +235,7 @@ export function KitForm({
       </fieldset>
 
       <div className="grid gap-6 border-t border-line pt-7 sm:grid-cols-2 [&>*]:min-w-0">
-        <Field label="Ім'я" error={state.fieldErrors?.name}>
+        <Field label={t.kitForm.name} error={state.fieldErrors?.name}>
           <input
             name="name"
             type="text"
@@ -239,7 +247,7 @@ export function KitForm({
           />
         </Field>
 
-        <Field label="Телефон" error={state.fieldErrors?.phone}>
+        <Field label={t.kitForm.phone} error={state.fieldErrors?.phone}>
           <input
             name="phone"
             type="tel"
@@ -284,7 +292,11 @@ export function KitForm({
 
         {needsHandle(channel) && (
           <Field
-            label={channel === "instagram" ? "Нік в Instagram" : "Нік у Telegram"}
+            label={
+              channel === "instagram"
+                ? t.kitForm.instagram
+                : t.kitForm.telegram
+            }
             error={state.fieldErrors?.handle}
           >
             <input
@@ -308,7 +320,7 @@ export function KitForm({
         {/* Колір лише там, де він є: обличчя тейпується білим. */}
         {kit?.allowsColor ? (
           <div>
-            <p className="text-[14px] text-ink-muted">Колір тейпу</p>
+            <p className="text-[14px] text-ink-muted">{t.kitForm.tapeColor}</p>
             {/* Зразками, а не списком: колір обирають оком. */}
             <div className="mt-2 flex flex-wrap gap-2">
               {TAPE_COLORS.map((c) => (
@@ -350,14 +362,14 @@ export function KitForm({
 
         {kit?.needsMeasurements && (
           <Field
-            label="Ваші параметри, см"
-            hint="Потрібні, щоб розкроїти тейп під ваше обличчя. Що саме виміряти — підкажу в чаті, якщо не впевнені."
+            label={t.kitForm.measurements}
+            hint={t.kitForm.measurementsHint}
           >
             <textarea
               name="measurements"
               rows={3}
               defaultValue={sent?.measurements ?? ""}
-              placeholder="Наприклад: ширина чола 14, довжина обличчя 19"
+              placeholder={t.kitForm.measurementsPlaceholder}
               className={`${INPUT_CLS} min-h-[96px] resize-y py-3 leading-relaxed`}
             />
           </Field>
@@ -365,11 +377,11 @@ export function KitForm({
       </fieldset>
 
       <fieldset className="space-y-6 border-t border-line pt-7">
-        <legend className="sr-only">Доставка</legend>
-        <p className="text-[15px]">Куди надіслати</p>
+        <legend className="sr-only">{t.kitForm.delivery}</legend>
+        <p className="text-[15px]">{t.kitForm.deliveryTo}</p>
 
         <div className="grid gap-6 sm:grid-cols-2 [&>*]:min-w-0">
-          <Field label="Країна">
+          <Field label={t.kitForm.country}>
             <select
               name="country"
               value={country}
@@ -384,7 +396,7 @@ export function KitForm({
             </select>
           </Field>
 
-          <Field label="Місто" error={state.fieldErrors?.city}>
+          <Field label={t.kitForm.city} error={state.fieldErrors?.city}>
             <input
               name="city"
               type="text"
@@ -398,12 +410,12 @@ export function KitForm({
 
         <p className="text-[13px] leading-relaxed text-ink-muted">
           {isWorldwide(country)
-            ? "Доставка за кордон — вартість порахую окремо й скажу до оплати."
-            : "Точну адресу й відділення візьму в чаті, коли підтвердимо замовлення."}
+            ? t.kitForm.countryHint
+            : t.kitForm.cityHint}
         </p>
       </fieldset>
 
-      <Field label="Коментар (необов'язково)">
+      <Field label={t.kitForm.note}>
         <textarea
           name="note"
           rows={3}
@@ -440,7 +452,7 @@ export function KitForm({
       )}
 
       <div className="pt-2">
-        <SubmitButton />
+        <SubmitButton t={t} />
       </div>
     </form>
   );

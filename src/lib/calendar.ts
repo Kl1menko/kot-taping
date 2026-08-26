@@ -1,3 +1,5 @@
+import type { Locale } from "./i18n.ts";
+
 /**
  * Чисті хелпери для календаря — без React і без звернень до БД.
  *
@@ -176,13 +178,33 @@ export function monthGrid(date: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 }
 
-/** `Серпень 2026 р.` */
-export function monthTitle(d: Date): string {
+/**
+ * `Серпень 2026 р.` / `August 2026`
+ *
+ * Англійська через `Intl`, а не другим списком назв: місяці — це рівно те,
+ * що `Intl` знає напевно, і дублювати їх руками означало б завести другий
+ * набір рядків, який ніхто не перевіряє.
+ *
+ * Українська лишається на власних константах: `Intl` дає «серпень 2026»
+ * без «р.», а знижений регістр після цифр читається як помилка верстки.
+ */
+export function monthTitle(d: Date, locale: Locale = "uk"): string {
+  if (locale === "en") {
+    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
   return `${MONTHS_NOMINATIVE[d.getMonth()]} ${d.getFullYear()} р.`;
 }
 
-/** `8 серпня` */
-export function dayTitle(d: Date): string {
+/**
+ * `8 серпня` / `8 August`
+ *
+ * Українська потребує родового відмінка («8 серпня», не «8 серпень») — тому
+ * окремий список, а не `Intl`, який відмінків не знає.
+ */
+export function dayTitle(d: Date, locale: Locale = "uk"): string {
+  if (locale === "en") {
+    return d.toLocaleDateString("en-US", { day: "numeric", month: "long" });
+  }
   return `${d.getDate()} ${MONTHS_GENITIVE[d.getMonth()]}`;
 }
 

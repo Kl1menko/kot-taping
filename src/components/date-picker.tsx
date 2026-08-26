@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { Dictionary } from "@/lib/dictionary";
+import type { Locale } from "@/lib/i18n";
 import {
   dateKey,
   dayTitle,
@@ -15,7 +17,6 @@ import {
   type Schedule,
 } from "@/lib/schedule";
 
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
 /**
  * Вибір дати з тих, що майстриня справді відкрила.
@@ -37,9 +38,13 @@ export function DatePicker({
   invalid,
   /** Кабінет ще не обрано — показуємо підказку замість порожньої сітки. */
   awaitingLocation,
+  t,
+  locale,
 }: {
   name: string;
   schedule: Schedule;
+  t: Dictionary;
+  locale: Locale;
   defaultValue?: string;
   /** Форма слухає вибір: від дати залежать доступні проміжки часу. */
   onSelect?: (day: string) => void;
@@ -91,20 +96,20 @@ export function DatePicker({
             type="button"
             onClick={() => shift(-1)}
             disabled={atFirstMonth}
-            aria-label="Попередній місяць"
+            aria-label={t.calendar.prevMonth}
             className="grid size-10 cursor-pointer place-items-center rounded-full bg-surface transition-colors duration-200 hover:bg-sand disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Arrow dir="left" />
           </button>
 
           <p aria-live="polite" className="text-[15px]">
-            {monthTitle(month)}
+            {monthTitle(month, locale)}
           </p>
 
           <button
             type="button"
             onClick={() => shift(1)}
-            aria-label="Наступний місяць"
+            aria-label={t.calendar.nextMonth}
             className="grid size-10 cursor-pointer place-items-center rounded-full bg-surface transition-colors duration-200 hover:bg-sand"
           >
             <Arrow dir="right" />
@@ -112,7 +117,7 @@ export function DatePicker({
         </div>
 
         <div className="mt-4 grid grid-cols-7 gap-1">
-          {WEEKDAYS.map((label) => (
+          {t.calendar.weekdays.map((label) => (
             <span
               key={label}
               aria-hidden="true"
@@ -123,7 +128,7 @@ export function DatePicker({
           ))}
         </div>
 
-        <div className="mt-1 grid grid-cols-7 gap-1" role="group" aria-label="Оберіть дату">
+        <div className="mt-1 grid grid-cols-7 gap-1" role="group" aria-label={t.calendar.pickDate}>
           {grid.map((date) => {
             const key = dateKey(date);
             const outside = date.getMonth() !== month.getMonth();
@@ -143,8 +148,8 @@ export function DatePicker({
                 aria-pressed={isSelected}
                 aria-label={
                   available
-                    ? dayTitle(date)
-                    : `${dayTitle(date)} — недоступно`
+                    ? dayTitle(date, locale)
+                    : `${dayTitle(date, locale)} — ${t.calendar.unavailable}`
                 }
                 className={[
                   "tnum aspect-square rounded-xl text-[15px] transition-colors duration-200",
@@ -170,29 +175,28 @@ export function DatePicker({
 
       {awaitingLocation ? (
         <span className="mt-1.5 block text-[13px] text-ink-muted">
-          Оберіть кабінет — покажу вільні дати саме для нього.
+          {t.calendar.pickLocation}
         </span>
       ) : !hasAny ? (
         <span className="mt-1.5 block text-[13px] text-ink-muted">
-          Найближчим часом вільних дат немає. Напишіть у Telegram чи Instagram —
-          підберемо час окремо.
+          {t.calendar.noDates}
         </span>
       ) : selected ? (
         <span className="mt-1.5 block text-[13px] text-ink-muted">
-          Обрано: {formatSelected(selected)}
+          {t.calendar.chosen}: {formatSelected(selected, locale)}
         </span>
       ) : (
         <span className="mt-1.5 block text-[13px] text-ink-muted">
-          Доступні дати виділені — оберіть зручну.
+          {t.calendar.hint}
         </span>
       )}
     </div>
   );
 }
 
-function formatSelected(day: string): string {
+function formatSelected(day: string, locale: Locale): string {
   const [y, m, d] = day.split("-").map(Number);
-  return dayTitle(new Date(y, m - 1, d));
+  return dayTitle(new Date(y, m - 1, d), locale);
 }
 
 function Arrow({ dir }: { dir: "left" | "right" }) {

@@ -17,7 +17,16 @@ import { Card, Container, SectionLabel } from "./ui";
 import type { Dictionary } from "@/lib/dictionary";
 import { localePath, type Locale } from "@/lib/i18n";
 
-function ServiceCard({ service, t }: { service: Service; t: Dictionary }) {
+function ServiceCard({
+  service,
+  t,
+  eager,
+}: {
+  service: Service;
+  t: Dictionary;
+  /** Перші картки — вантажаться одразу, не чекаючи на прокрут. */
+  eager?: boolean;
+}) {
   const meta = serviceMeta(service);
   const { open } = useBookingModal();
   return (
@@ -33,6 +42,18 @@ function ServiceCard({ service, t }: { service: Service; t: Dictionary }) {
           // Дві колонки на планшеті, три на десктопі — інакше браузер тягнув би
           // повнорозмірний файл під картку в 400px.
           sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          /**
+           * Перший ряд карток вантажимо одразу.
+           *
+           * Секція обгорнута в `Reveal`, який до появи в кадрі тримає її
+           * прозорою. Браузер не починає завантаження lazy-картинки в
+           * невидимому блоці, тож фото стартували аж тоді, коли людина
+           * докрутила — і перші пів секунди картка стояла порожньою.
+           *
+           * `priority` тут був би зайвим: він змагався б за канал із героєм,
+           * який справді на першому екрані. Достатньо зняти відкладення.
+           */
+          loading={eager ? "eager" : "lazy"}
           className="object-cover"
         />
 
@@ -180,12 +201,13 @@ export function Services({
         aria-labelledby={`tab-${active}`}
         className="mt-12 flex flex-wrap justify-start gap-5"
       >
-        {visible.map((service) => (
+        {visible.map((service, i) => (
           <div
             key={service.slug}
             className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
           >
-            <ServiceCard service={service} t={t} />
+            {/* Три перші — рівно один ряд на десктопі. */}
+            <ServiceCard service={service} t={t} eager={i < 3} />
           </div>
         ))}
       </div>

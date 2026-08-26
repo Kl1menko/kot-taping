@@ -1,5 +1,7 @@
 "use client";
 
+import type { Dictionary } from "@/lib/dictionary";
+
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -7,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
  * autoplay; falls back to the poster frame when the user prefers reduced
  * motion, and offers a manual play control in that case.
  */
-export function HeroVideo() {
+export function HeroVideo({ t }: { t: Dictionary }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [reduced, setReduced] = useState(false);
   const [playing, setPlaying] = useState(true);
@@ -49,7 +51,7 @@ export function HeroVideo() {
         muted
         playsInline
         preload="metadata"
-        aria-label="Сеанс лімфодренажного тейпування у студії"
+        aria-label={t.a11y.videoAlt}
       >
         {/* Small screens get the lighter 480px encode */}
         <source
@@ -70,7 +72,7 @@ export function HeroVideo() {
       <button
         type="button"
         onClick={toggle}
-        aria-label={playing ? "Зупинити відео" : "Відтворити відео"}
+        aria-label={playing ? t.a11y.pauseVideo : t.a11y.playVideo}
         className="absolute left-5 top-5 z-10 grid size-11 place-items-center rounded-full bg-white/80 text-ink backdrop-blur transition-colors duration-200 hover:bg-white md:left-8 md:top-8"
       >
         {playing ? (

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   DEFAULT_LOCALE,
@@ -21,6 +20,12 @@ import {
  * Посилання, а не кнопки: у кожної мови свій URL, тож перехід має працювати
  * з клавіатури, у новій вкладці й у пошуковій видачі. `<button>` забрав би
  * усе це заради того самого результату.
+ *
+ * Звичайний `<a>`, а не `<Link>`: зміна мови — це зміна документа цілком, і
+ * потрібне повне перезавантаження. `<Link>` робить клієнтський перехід із
+ * RSC-запитом, тож редирект із `Set-Cookie`, яким proxy запам'ятовує вибір,
+ * до навігації не застосовувався — на проді перемикач «залипав» і не
+ * повертав з англійської назад.
  */
 export function LanguageSwitch({
   locale,
@@ -79,7 +84,7 @@ export function LanguageSwitch({
       {LOCALES.map((item) => {
         const active = item === locale;
         return (
-          <Link
+          <a
             key={item}
             href={hrefFor(item)}
             hrefLang={item}
@@ -100,7 +105,7 @@ export function LanguageSwitch({
             ].join(" ")}
           >
             {LOCALE_SHORT[item]}
-          </Link>
+          </a>
         );
       })}
     </nav>
