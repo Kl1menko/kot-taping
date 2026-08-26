@@ -22,7 +22,6 @@ type BookingModalContext = {
 
 const Ctx = createContext<BookingModalContext | null>(null);
 
-/** Opens the booking sheet from anywhere on the page. */
 export function useBookingModal() {
   const ctx = useContext(Ctx);
   if (!ctx) {

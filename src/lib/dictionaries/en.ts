@@ -179,7 +179,7 @@ export const en = {
       priceFloor: "starting price",
       officesLabel: "Studios",
       groupsLabel: "Directions",
-      groupsTitle: "Six groups — pick the one you came for",
+      groupsTitle: "Six areas of work — choose your concern",
       citiesTitle: "Two studios",
       serviceForms: { one: "service", many: "services" },
       officeForms: { one: "studio", many: "studios" },

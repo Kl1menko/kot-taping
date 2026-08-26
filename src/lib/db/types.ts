@@ -287,7 +287,6 @@ export type LoginAttemptRow = {
   updated_at: string;
 };
 
-/** Мапа для типізації `supabase.from(...)`. */
 export type Database = {
   public: {
     Tables: {

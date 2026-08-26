@@ -35,7 +35,7 @@ export type Countable = {
  * Заплановані — ще не гроші, скасовані й неявки — не гроші взагалі. Інакше
  * виручка показувала б бажане замість дійсного.
  */
-export function isEarned(item: { status: string }): boolean {
+function isEarned(item: { status: string }): boolean {
   return item.status === "done";
 }
 
@@ -118,7 +118,6 @@ export type ServiceStat = {
   count: number;
   revenue: number;
   averageCheck: number;
-  /** Частка у виручці, 0–100. */
   share: number;
 };
 
@@ -193,7 +192,6 @@ export type Conversion = {
   converted: number;
   declined: number;
   pending: number;
-  /** Відсоток заявок, що стали записами. */
   rate: number;
 };
 
@@ -271,7 +269,6 @@ export function loadByWeekday(
   }));
 }
 
-/** Розподіл записів по годинах робочого вікна. */
 export function byHour(items: Countable[]): { hour: number; count: number }[] {
   const counts = new Map<number, number>();
   for (const a of items) {
@@ -292,7 +289,6 @@ export type LocationStat = {
   count: number;
   revenue: number;
   averageCheck: number;
-  /** Частка у виручці періоду, 0–100. */
   share: number;
 };
 
@@ -365,8 +361,6 @@ export function revenueByMonth(items: Countable[], year: number): MonthBucket[] 
   return buckets;
 }
 
-// — Онлайн-оплати —
-
 /**
  * Рядок оплати, який уміє порахувати цей модуль.
  *
@@ -385,9 +379,7 @@ export type CountablePayment = {
 };
 
 export type OnlinePayments = {
-  /** Скільки рахунків успішно оплачено за період. */
   count: number;
-  /** Сума оплачених, у копійках. */
   amount: number;
   /** Середня оплата, у копійках. 0 — коли оплат не було. */
   average: number;

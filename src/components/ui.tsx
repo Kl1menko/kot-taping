@@ -117,7 +117,6 @@ export function Card({
   );
 }
 
-/** Centres section content and holds the horizontal gutter. */
 export function Container({
   children,
   className = "",

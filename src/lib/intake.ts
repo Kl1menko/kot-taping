@@ -9,8 +9,6 @@
  * calendar.ts та analytics.ts.
  */
 
-// — Канал зв'язку —
-
 export type ContactChannel = "telegram" | "instagram" | "phone";
 
 export const CONTACT_CHANNELS: {
@@ -72,8 +70,6 @@ export function needsHandle(channel: ContactChannel): boolean {
   return channel === "telegram" || channel === "instagram";
 }
 
-// — Час дня —
-
 export type PreferredTime = "morning" | "day" | "evening";
 
 /**
@@ -100,8 +96,6 @@ export function preferredTimeLabel(id: string): string | null {
   return found ? `${found.label} (${found.range})` : null;
 }
 
-// — Колір тейпу —
-
 /**
  * Кольори з асортименту студії.
  *
@@ -124,8 +118,6 @@ type TapeColor = (typeof TAPE_COLORS)[number];
 export function isTapeColor(v: string): v is TapeColor {
   return (TAPE_COLORS as readonly string[]).includes(v);
 }
-
-// — Протипоказання —
 
 /**
  * Абсолютні протипоказання — ті, за яких процедуру не роблять без окремої
@@ -159,8 +151,6 @@ export function contraindicationLabels(ids: readonly string[]): string[] {
     .map((id) => CONTRAINDICATIONS.find((c) => c.id === id)?.label)
     .filter((label): label is string => Boolean(label));
 }
-
-// — Зріст —
 
 /**
  * Межі — захист від друкарської помилки («16» замість «160», «1680»), а не

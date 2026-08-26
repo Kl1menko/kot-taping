@@ -74,7 +74,6 @@ export async function getAppointmentPayments(
   return view({ appointmentId });
 }
 
-/** Оплати за замовленням набору. */
 export async function getKitOrderPayments(
   kitOrderId: string,
 ): Promise<PaymentView> {
@@ -191,7 +190,6 @@ export async function issueAppointmentInvoice(
   });
 }
 
-/** Рахунок за набір для самотейпування. */
 export async function issueKitOrderInvoice(
   kitOrderId: string,
   amountUah: number,

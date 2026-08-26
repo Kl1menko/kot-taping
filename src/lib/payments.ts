@@ -82,15 +82,12 @@ export function canReissue(statuses: PaymentStatus[]): boolean {
   return !statuses.some(isPending);
 }
 
-// — Суми —
-
 /** Гривні → копійки. Округлення до цілої копійки, бо банк дробових не знає. */
 export function toMinor(hryvnia: number): number {
   return Math.round(hryvnia * 100);
 }
 
-/** Копійки → гривні для показу. */
-export function toMajor(minor: number): number {
+function toMajor(minor: number): number {
   return minor / 100;
 }
 
@@ -113,7 +110,7 @@ export function formatAmount(minor: number): string {
  * найдорожча позиція 7200 ₴, тож рахунок на 100 000 ₴ майже напевно означає,
  * що хтось увів копійки замість гривень.
  */
-export const MAX_AMOUNT_UAH = 100_000;
+const MAX_AMOUNT_UAH = 100_000;
 
 export function validateAmount(hryvnia: number): string | null {
   if (!Number.isFinite(hryvnia)) return "Вкажіть суму.";

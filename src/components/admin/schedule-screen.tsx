@@ -469,7 +469,6 @@ export function ScheduleScreen({
   );
 }
 
-/** Відрізки часу й нотатка одного дня. */
 function DaySheet({
   day,
   intervals,

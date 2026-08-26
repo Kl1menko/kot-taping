@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { env } from "@/lib/env";
 
-export const SESSION_COOKIE = "kt_session";
+const SESSION_COOKIE = "kt_session";
 
 const MAX_AGE_S = 60 * 60 * 24 * 14; // 14 днів
 
@@ -19,7 +19,7 @@ function key() {
   return new TextEncoder().encode(env.sessionSecret());
 }
 
-export async function encryptSession(payload: SessionPayload): Promise<string> {
+async function encryptSession(payload: SessionPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -28,7 +28,7 @@ export async function encryptSession(payload: SessionPayload): Promise<string> {
 }
 
 /** Повертає null на будь-якій проблемі: підпис, строк,формат. */
-export async function decryptSession(
+async function decryptSession(
   token: string | undefined,
 ): Promise<SessionPayload | null> {
   if (!token) return null;
@@ -58,7 +58,7 @@ export async function destroySession() {
   store.delete(SESSION_COOKIE);
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+async function getSession(): Promise<SessionPayload | null> {
   const store = await cookies();
   return decryptSession(store.get(SESSION_COOKIE)?.value);
 }

@@ -46,7 +46,6 @@ export const CATEGORIES: { id: ServiceCategory; label: string }[] = [
 ];
 
 export const SERVICES: Service[] = [
-  // — М'язеві корекції —
   {
     slug: "znebolennya",
     title: "Знеболення",
@@ -87,7 +86,6 @@ export const SERVICES: Service[] = [
     tone: "sand",
   },
 
-  // — Неврологічні —
   {
     slug: "nevrologichni",
     title: "Неврологічні",
@@ -98,7 +96,6 @@ export const SERVICES: Service[] = [
     tone: "clay",
   },
 
-  // — Лімфодренаж тіла —
   {
     slug: "lymph-belly-single",
     title: "Живіт — одинарне",
@@ -232,7 +229,6 @@ export const SERVICES: Service[] = [
     tone: "clay",
   },
 
-  // — Лімфодренаж обличчя —
   {
     slug: "lymph-face-neck",
     title: "Обличчя + шия",
@@ -265,7 +261,6 @@ export const SERVICES: Service[] = [
     tone: "clay",
   },
 
-  // — Моделювання обличчя —
   {
     slug: "cheeks",
     title: "Лімфодренаж щік",
@@ -297,7 +292,6 @@ export const SERVICES: Service[] = [
     tone: "clay",
   },
 
-  // — Набори для моделювання обличчя —
   {
     slug: "set-3-zones-3",
     title: "3 зони — курс на 3 процедури",

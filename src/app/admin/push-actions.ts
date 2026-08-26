@@ -50,7 +50,6 @@ export async function subscribeDevice(
   return { ok: true };
 }
 
-/** Прибирає пристрій із розсилки. */
 export async function unsubscribeDevice(
   endpoint: string,
 ): Promise<{ ok: boolean }> {
@@ -107,7 +106,6 @@ export type PushDevice = {
   label: string;
   lastOkAt: string | null;
   createdAt: string;
-  /** Чи це той пристрій, з якого дивляться зараз. */
   current: boolean;
 };
 

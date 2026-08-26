@@ -10,11 +10,9 @@ import type { ServiceCategory } from "./services";
  */
 
 export type Tone = {
-  /** Фон картки. */
   bg: string;
   /** Кант ліворуч — єдиний насичений елемент. */
   bar: string;
-  /** Фон при наведенні. */
   hover: string;
 };
 

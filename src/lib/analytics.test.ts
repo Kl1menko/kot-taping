@@ -200,8 +200,6 @@ test("запис поза робочим вікном не роздуває за
   assert.equal(load.find((l) => l.weekday === 1)!.percent, 0);
 });
 
-// — Розбивка по кабінетах —
-
 const CITIES = new Map([
   ["lviv-id", "Львів"],
   ["kyiv-id", "Київ"],
@@ -263,8 +261,6 @@ test("кабінети відсортовані за виручкою", () => {
   assert.equal(stats[0].city, "Київ", "попереду має бути більша виручка");
 });
 
-// — Виручка по місяцях —
-
 test("виручка розкладається по місяцях року", () => {
   const months = revenueByMonth(
     [
@@ -303,8 +299,6 @@ test("незароблені візити рахуються в count, але н
   assert.equal(months[7].count, 1, "запланований візит — це подія в місяці");
   assert.equal(months[7].revenue, 0, "але ще не гроші");
 });
-
-// — Онлайн-оплати —
 
 function pay(over: Partial<CountablePayment> = {}): CountablePayment {
   return {

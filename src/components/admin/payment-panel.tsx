@@ -55,7 +55,6 @@ export function PaymentPanel({
   const paid = payments.find((p) => isPaid(p.status as PaymentStatus));
   const live = payments.find((p) => isPending(p.status as PaymentStatus));
 
-  // — Оплачено: далі робити нічого —
   if (paid) {
     return (
       <div className="rounded-[18px] bg-sand p-5">
@@ -77,7 +76,6 @@ export function PaymentPanel({
     );
   }
 
-  // — Рахунок виставлено й чекає оплати —
   if (live) {
     return (
       <div className="@container rounded-[18px] bg-canvas p-5">
@@ -178,7 +176,6 @@ export function PaymentPanel({
     );
   }
 
-  // — Еквайринг не налаштований —
   if (!enabled) {
     return (
       <p className="rounded-[18px] bg-canvas px-5 py-4 text-[14px] leading-relaxed text-ink-muted">
@@ -187,7 +184,6 @@ export function PaymentPanel({
     );
   }
 
-  // — Рахунку немає або він відпав: можна виставляти —
   const blocked = !canReissue(statuses);
   // Остання невдала спроба — щоб майстриня бачила, чому не вийшло.
   const failed = payments[0];

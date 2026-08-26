@@ -4,7 +4,6 @@ import { durationLabel, timeRange } from "@/lib/calendar";
 import type { AppointmentWithRefs } from "@/lib/db/appointments";
 import { Chip, StatusBadge, formatMoney } from "./ui";
 
-/** Картка запису у списку. */
 export function AppointmentCard({
   appointment,
   onOpen,

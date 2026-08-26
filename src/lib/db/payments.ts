@@ -15,7 +15,6 @@ function targetColumn(target: PaymentTarget) {
     : { column: "kit_order_id" as const, value: target.kitOrderId };
 }
 
-/** Рахунки за одним записом чи замовленням — новіші згори. */
 export async function listPayments(
   target: PaymentTarget,
 ): Promise<PaymentRow[]> {
@@ -62,7 +61,7 @@ export async function mapPayments(
   return map;
 }
 
-export async function getPaymentByInvoice(
+async function getPaymentByInvoice(
   invoiceId: string,
 ): Promise<PaymentRow | null> {
   const { data, error } = await db()

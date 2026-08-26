@@ -6,8 +6,7 @@
  * Адаптовано з calendarvet-next/src/lib/phone.ts (там покрито тестами).
  */
 
-/** Лишає у рядку тільки цифри. */
-export function digitsOnly(value: string): string {
+function digitsOnly(value: string): string {
   return value.replace(/\D+/g, "");
 }
 
@@ -27,7 +26,6 @@ export function normalizePhone(value: string): string {
   return d;
 }
 
-/** Чи є номер повним українським мобільним. */
 export function isValidPhone(value: string): boolean {
   return /^0\d{9}$/.test(normalizePhone(value));
 }

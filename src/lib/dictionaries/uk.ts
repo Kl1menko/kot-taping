@@ -191,7 +191,7 @@ export const uk = {
       priceFloor: "нижня межа",
       officesLabel: "Кабінети",
       groupsLabel: "Напрями",
-      groupsTitle: "Шість груп — оберіть ту, з якою прийшли",
+      groupsTitle: "Шість напрямів роботи — оберіть свій запит",
       citiesTitle: "Приймаю у двох містах",
       serviceForms: { one: "послуга", few: "послуги", many: "послуг" } as PluralForms,
       officeForms: { one: "кабінет", few: "кабінети", many: "кабінетів" } as PluralForms,

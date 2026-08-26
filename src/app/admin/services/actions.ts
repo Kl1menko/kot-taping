@@ -310,7 +310,6 @@ export async function toggleService(id: string, isActive: boolean) {
   revalidateService();
 }
 
-/** Порядок у списку — стрілками вгору/вниз у межах категорії. */
 export async function moveService(id: string, direction: "up" | "down") {
   await requireSession();
 

@@ -68,7 +68,6 @@ export async function listLocations(): Promise<LocationRow[]> {
   return data ?? [];
 }
 
-/** Історія візитів клієнта — для картки клієнта. */
 export async function listClientAppointments(
   clientId: string,
 ): Promise<AppointmentWithRefs[]> {

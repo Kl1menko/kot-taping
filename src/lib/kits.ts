@@ -24,7 +24,6 @@ export type Kit = {
   zone: KitZone;
   /** Чи можна обрати колір. Для обличчя тейп лише білий. */
   allowsColor: boolean;
-  /** Чи потрібні заміри в сантиметрах. */
   needsMeasurements: boolean;
 };
 
@@ -60,8 +59,6 @@ export function isDeliveryCountry(v: string): v is DeliveryCountry {
 export function isWorldwide(country: string): boolean {
   return country !== "Україна";
 }
-
-// — Статуси замовлення —
 
 export type KitOrderStatus =
   | "new"

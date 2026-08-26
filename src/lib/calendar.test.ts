@@ -12,7 +12,6 @@ import {
   weekDays,
 } from "./calendar.ts";
 
-/** Хелпер: дата сьогодні о вказаній годині:хвилині. */
 function at(hour: number, minute = 0): Date {
   const d = new Date(2026, 7, 8);
   d.setHours(hour, minute, 0, 0);
@@ -127,8 +126,6 @@ test("тривалість підписується українською", () 
   assert.equal(durationLabel(120), "2 години");
   assert.equal(durationLabel(300), "5 годин");
 });
-
-/* --- Кеш діапазону: коли крок стрілкою може обійтись без запиту --- */
 
 const d = (y: number, m: number, day: number) => new Date(y, m - 1, day);
 

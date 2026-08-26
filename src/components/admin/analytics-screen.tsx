@@ -441,7 +441,6 @@ export function AnalyticsScreen({ data }: { data: AnalyticsData }) {
   );
 }
 
-/** Спільний вигляд вкладки в перемикачах періоду й кабінету. */
 function tabCls(active: boolean): string {
   return [
     "min-w-0 flex-1 rounded-full px-3 py-2.5 text-center text-[14px] whitespace-nowrap",

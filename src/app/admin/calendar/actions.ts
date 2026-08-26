@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { upsertClient } from "@/lib/db/clients";
 import { findConflicts } from "@/lib/db/appointments";
-import { isValidPhone, normalizePhone } from "@/lib/phone";
+import { isValidPhone } from "@/lib/phone";
 import { overlaps, timeRange } from "@/lib/calendar";
 import type { AppointmentStatus } from "@/lib/db/types";
 
@@ -42,7 +42,6 @@ function parseForm(formData: FormData) {
   };
 }
 
-/** Створює або оновлює запис — форма в обох випадках одна. */
 export async function saveAppointment(
   _prev: AppointmentState,
   formData: FormData,
@@ -175,47 +174,3 @@ export async function deleteAppointment(id: string) {
   revalidatePath("/admin");
 }
 
-/**
- * «Повторити запис» — той самий клієнт, послуга й кабінет, нова дата.
- *
- * `location_id` копіюємо з джерела: колонка обов'язкова (міграція 0002), тож
- * без неї вставка падає, а не «просто лишає кабінет порожнім». Курс — це
- * серія візитів в одному місці, тож копія кабінету тут і по суті правильна.
- */
-export async function repeatAppointment(id: string, startsAt: string) {
-  await requireSession();
-
-  const { data: source, error: readError } = await db()
-    .from("appointments")
-    .select("client_id, service_id, location_id, duration_min, price")
-    .eq("id", id)
-    .single();
-
-  if (readError) throw new Error(`Не вдалося прочитати запис: ${readError.message}`);
-
-  const start = new Date(startsAt);
-  if (Number.isNaN(start.getTime())) {
-    throw new Error("Некоректна дата повторного запису.");
-  }
-
-  const { error } = await db().from("appointments").insert({
-    client_id: source.client_id,
-    service_id: source.service_id,
-    location_id: source.location_id,
-    starts_at: start.toISOString(),
-    duration_min: source.duration_min,
-    price: source.price,
-    status: "planned",
-    source: "manual",
-  });
-
-  if (error) throw new Error(`Не вдалося повторити запис: ${error.message}`);
-
-  revalidatePath("/admin/calendar");
-  revalidatePath("/admin");
-}
-
-/** Використовує клієнтська форма, щоб підставити телефон у канонічному вигляді. */
-export async function normalizePhoneAction(value: string) {
-  return normalizePhone(value);
-}

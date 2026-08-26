@@ -196,9 +196,6 @@ function faqNode(locale: Locale) {
   };
 }
 
-// — Розмітка сторінок —
-
-/** Головна: бізнес, сайт, каталог послуг і FAQ. */
 export function StructuredData({
   services,
   locale = DEFAULT_LOCALE,
@@ -239,7 +236,6 @@ export function StructuredData({
   );
 }
 
-/** Сторінка категорії: список послуг + хлібні крихти. */
 export function CategoryStructuredData({
   category,
   services,
@@ -289,7 +285,6 @@ export function CategoryStructuredData({
   );
 }
 
-/** Каталог послуг: перелік категорій. */
 export function CatalogStructuredData({
   counts,
   locale = DEFAULT_LOCALE,

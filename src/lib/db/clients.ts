@@ -237,7 +237,7 @@ export async function updateClient(
  * здоров'я, тож віддавати всю базу в HTML на кожен відкритий екран не варто.
  * Півтисячі — це кілька років роботи студії, і при цьому ще розумний обсяг.
  */
-export const CLIENTS_PAGE_SIZE = 500;
+const CLIENTS_PAGE_SIZE = 500;
 
 /**
  * Пошук за іменем або телефоном. Телефонний запит нормалізуємо, щоб «+380 63»
@@ -248,7 +248,7 @@ export const CLIENTS_PAGE_SIZE = 500;
  * пошук на екрані фільтрує вже завантажений масив. Тепер список довший, а якщо
  * він усе одно впреться в межу, інтерфейс про це скаже вголос.
  */
-export async function searchClients(
+async function searchClients(
   query: string,
 ): Promise<{ rows: ClientRow[]; hasMore: boolean }> {
   const trimmed = query.trim();

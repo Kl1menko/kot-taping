@@ -17,7 +17,7 @@ import { dateKey, startOfDay } from "./calendar.ts";
 import { PREFERRED_TIMES, type PreferredTime } from "./intake.ts";
 
 /** Крок сітки часу, хвилин. Півгодини — дрібніше майстриня не планує. */
-export const SLOT_STEP_MIN = 30;
+const SLOT_STEP_MIN = 30;
 
 /**
  * Межі проміжків анкети, у хвилинах від опівночі. Дзеркалять підписи в
@@ -100,7 +100,6 @@ export function normalizeIntervals(
   return merged;
 }
 
-/** Межі дня цілком — від найранішого початку до найпізнішого кінця. */
 export function dayBounds(intervals: readonly Interval[]): Interval | null {
   if (intervals.length === 0) return null;
   return {
@@ -135,7 +134,6 @@ export function isWorkingDay(schedule: Schedule, day: string): boolean {
   return schedule.has(day);
 }
 
-/** Відрізки дня; порожній масив для вихідного. */
 export function intervalsFor(schedule: Schedule, day: string): Interval[] {
   return schedule.get(day) ?? [];
 }
@@ -193,7 +191,6 @@ export function timesFor(
   return times;
 }
 
-/** Чи можна записатись саме на цей час. */
 export function isTimeAvailable(
   schedule: Schedule,
   day: string,

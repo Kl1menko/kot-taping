@@ -109,8 +109,6 @@ export function pageMetadata({
   };
 }
 
-// — Категорії послуг —
-
 /**
  * Тексти сторінок категорій.
  *
@@ -127,7 +125,6 @@ export type CategorySeo = {
   heading: string;
   /** `<meta name="description">`, до ~160 символів. */
   description: string;
-  /** Вступний абзац на сторінці. */
   intro: string;
   keywords: string[];
 };
@@ -244,7 +241,6 @@ const CATEGORY_SEO_UK: Record<ServiceCategory, CategorySeo> = {
     ],
   },
 };
-
 
 /**
  * Англійські тексти категорій.
@@ -374,7 +370,6 @@ const CATEGORY_SEO_EN: Record<ServiceCategory, CategorySeo> = {
   },
 };
 
-/** Тексти категорій потрібною мовою. */
 export function categorySeo(
   id: ServiceCategory,
   locale: Locale = DEFAULT_LOCALE,
@@ -390,8 +385,6 @@ export function categoryLabel(
   if (locale === "en") return getDictionary("en").categories[id].label;
   return CATEGORIES.find((c) => c.id === id)?.label ?? id;
 }
-
-// — Міста —
 
 export type CitySeo = {
   /** Місто у місцевому відмінку: «у Львові», «у Києві». */
@@ -440,7 +433,6 @@ const CITY_SEO_UK: Record<string, CitySeo> = {
     landmark: "Берестейський",
   },
 };
-
 
 /** Англійські тексти сторінок міст. Адреси транслітеровані, не перекладені. */
 const CITY_SEO_EN: Record<string, CitySeo> = {

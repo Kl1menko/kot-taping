@@ -14,7 +14,6 @@
  */
 
 export type GalleryItem = {
-  /** Шлях від `public/`. */
   src: string;
   alt: string;
   /** Підпис до фото. Показується у перегляді на весь екран. */

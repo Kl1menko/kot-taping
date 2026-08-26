@@ -146,57 +146,6 @@ export async function toggleWorkingDay(
 }
 
 /**
- * Задає години вже відкритого дня.
- *
- * Перевірку меж робимо тут, а не покладаємось на констрейнт: помилка бази
- * прилетіла б майстрині як «violates check constraint», а не як зрозуміле
- * «кінець має бути пізніше початку».
- */
-export async function setDayHours(
-  locationId: string,
-  day: string,
-  opensAt: string,
-  closesAt: string,
-): Promise<{ ok: boolean; message?: string }> {
-  await requireSession();
-
-  if (!DAY_RE.test(day)) throw new Error("Некоректна дата.");
-
-  const opens = parseTime(opensAt);
-  const closes = parseTime(closesAt);
-
-  if (opens === null || closes === null) {
-    return { ok: false, message: "Час у форматі 10:00." };
-  }
-  if (closes <= opens) {
-    return { ok: false, message: "Кінець має бути пізніше початку." };
-  }
-
-  await assertLocation(locationId);
-
-  // Upsert по (location_id, day): у таблиці на цю пару є unique, тож день
-  // або оновиться, або з'явиться — без гонки між читанням і записом.
-  const { error } = await db()
-    .from("working_days")
-    .upsert(
-      {
-        location_id: locationId,
-        day,
-        opens_at: formatTime(opens),
-        closes_at: formatTime(closes),
-      },
-      { onConflict: "location_id,day" },
-    );
-
-  if (error) {
-    return { ok: false, message: `Не вдалося зберегти: ${error.message}` };
-  }
-
-  revalidate();
-  return { ok: true };
-}
-
-/**
  * Відкриває або закриває одразу набір днів — «усі суботи місяця», «весь
  * тиждень». Без цього графік на місяць складався б із двадцяти окремих тапів.
  */

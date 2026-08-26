@@ -3,7 +3,6 @@ import "server-only";
 import { db } from "./client";
 import { dateKey, startOfDay } from "@/lib/calendar";
 import {
-  formatTime,
   normalizeIntervals,
   parseTime,
   toSchedule,
@@ -230,7 +229,3 @@ export async function readSchedule(
   return days ? toSchedule(days) : null;
 }
 
-/** Хвилини від опівночі → `10:00` для колонки `time` у Postgres. */
-export function toTimeColumn(minutes: number): string {
-  return formatTime(minutes);
-}

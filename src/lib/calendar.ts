@@ -69,7 +69,7 @@ export function resolveTz(current: string | undefined): string {
   return isPlatformDefault ? STUDIO_TZ : normalized;
 }
 
-export const MONTHS_GENITIVE = [
+const MONTHS_GENITIVE = [
   "січня",
   "лютого",
   "березня",
@@ -84,7 +84,7 @@ export const MONTHS_GENITIVE = [
   "грудня",
 ];
 
-export const MONTHS_NOMINATIVE = [
+const MONTHS_NOMINATIVE = [
   "Січень",
   "Лютий",
   "Березень",
@@ -208,7 +208,6 @@ export function dayTitle(d: Date, locale: Locale = "uk"): string {
   return `${d.getDate()} ${MONTHS_GENITIVE[d.getMonth()]}`;
 }
 
-/** `10:40` з дати. */
 export function timeLabel(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
@@ -243,7 +242,7 @@ export function weekRange(d: Date): { start: Date; end: Date } {
   return { start: days[0], end: addDays(days[6], 1) };
 }
 
-export function monthRange(d: Date): { start: Date; end: Date } {
+function monthRange(d: Date): { start: Date; end: Date } {
   const start = new Date(d.getFullYear(), d.getMonth(), 1);
   const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
   return { start, end };

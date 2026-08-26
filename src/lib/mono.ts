@@ -87,10 +87,7 @@ async function call<T>(
   }
 }
 
-// — Створення рахунку —
-
 export type CreateInvoiceInput = {
-  /** Копійки. */
   amount: number;
   /** Призначення платежу — його бачить клієнтка в застосунку банку. */
   destination: string;
@@ -134,8 +131,6 @@ export async function createInvoice(
   }
   return result;
 }
-
-// — Статус рахунку —
 
 export type InvoiceStatus = {
   invoiceId: string;
@@ -186,8 +181,6 @@ export function parseInvoiceState(raw: Record<string, unknown>): InvoiceStatus {
     ...(raw.modifiedDate ? { modifiedDate: String(raw.modifiedDate) } : {}),
   };
 }
-
-// — Перевірка підпису вебхука —
 
 /**
  * Публічний ключ банку.
