@@ -24,6 +24,9 @@ export type ServiceRow = {
   price_from: boolean;
   wear: string | null;
   badge: string | null;
+  /** Англійські підписи носіння та бейджа — міграція 0017. */
+  wear_en: string | null;
+  badge_en: string | null;
   category: string;
   tone: "sand" | "clay" | "blush";
   /**

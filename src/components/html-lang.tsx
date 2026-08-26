@@ -19,10 +19,23 @@ import { HTML_LANG, type Locale } from "@/lib/i18n";
  * Google виконує JS, а головний сигнал мови для нього — `hreflang` у `<head>`
  * і сам текст сторінки, які віддаються правильними вже в HTML.
  */
-export function HtmlLang({ locale }: { locale: Locale }) {
+export function HtmlLang({
+  locale,
+  skipToContent,
+}: {
+  locale: Locale;
+  /** Підпис посилання «пропустити навігацію» мовою сторінки. */
+  skipToContent: string;
+}) {
   useEffect(() => {
     document.documentElement.lang = HTML_LANG[locale];
-  }, [locale]);
+
+    // Посилання живе в кореневому layout — вище сегмента [lang], тож на
+    // сервері воно завжди українське. Для читача з екрана англійської
+    // сторінки це перше, що озвучується, тож підпис має збігатися з мовою.
+    const skip = document.querySelector<HTMLAnchorElement>('a[href="#main"]');
+    if (skip) skip.textContent = skipToContent;
+  }, [locale, skipToContent]);
 
   return null;
 }

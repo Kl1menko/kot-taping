@@ -122,3 +122,59 @@ async function fill(table, translations) {
 
 await fill("services", SERVICES);
 await fill("kits", KITS);
+
+/**
+ * Підписи носіння та бейджа (міграція 0017).
+ *
+ * Ключ — український оригінал, бо ці рядки повторюються між послугами:
+ * «5–10 днів» стоїть у кількох, і зіставляти їх по slug'у означало б
+ * переписувати той самий переклад стільки ж разів.
+ */
+const WEAR = {
+  "5–10 днів": "5–10 days",
+  "10–14 днів": "10–14 days",
+  "14–16 днів": "14–16 days",
+};
+
+const BADGE = {
+  "Курс 3 процедури": "Course of 3",
+  "Курс 5 процедур": "Course of 5",
+  "Курс 7 процедур": "Course of 7",
+  "Курс 10 процедур": "Course of 10",
+  "Розмір S-M-L": "Sizes S / M / L",
+  "Розмір універсальний": "One size",
+};
+
+async function fillLabels() {
+  const res = await fetch(
+    `${URL_BASE}/rest/v1/services?select=slug,wear,badge,wear_en,badge_en`,
+    { headers },
+  );
+  // Колонок ще немає (міграцію 0017 не виконано) — не падаємо: решта
+  // перекладів уже записана, і повторний запуск допише ці, коли колонки
+  // з'являться.
+  if (!res.ok) {
+    console.log("wear/badge: пропущено — виконайте міграцію 0017");
+    return;
+  }
+
+  let written = 0;
+  for (const row of await res.json()) {
+    const patch = {};
+    if (row.wear && !row.wear_en && WEAR[row.wear]) patch.wear_en = WEAR[row.wear];
+    if (row.badge && !row.badge_en && BADGE[row.badge]) {
+      patch.badge_en = BADGE[row.badge];
+    }
+    if (Object.keys(patch).length === 0) continue;
+
+    const put = await fetch(
+      `${URL_BASE}/rest/v1/services?slug=eq.${encodeURIComponent(row.slug)}`,
+      { method: "PATCH", headers, body: JSON.stringify(patch) },
+    );
+    if (!put.ok) throw new Error(`${row.slug}: ${put.status} ${await put.text()}`);
+    written += 1;
+  }
+  console.log(`wear/badge: записано ${written}`);
+}
+
+await fillLabels();

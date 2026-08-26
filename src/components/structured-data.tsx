@@ -1,7 +1,7 @@
 import type { Service } from "@/lib/services";
 import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SITE_URL } from "@/lib/site";
-import { getDictionary } from "@/lib/dictionary";
+import { cityLabel, getDictionary } from "@/lib/dictionary";
 import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n";
 
 /**
@@ -64,7 +64,7 @@ const OPENING_HOURS = [
 ];
 
 /** Адреса кабінету — та сама форма для бізнесу й для сторінки міста. */
-function address(location: (typeof LOCATIONS)[number]) {
+function address(location: { city: string; address: string }) {
   return {
     "@type": "PostalAddress",
     streetAddress: location.address,
@@ -82,6 +82,7 @@ function departmentId(slug: string) {
  * дає право на локальну картку у видачі.
  */
 function businessNode(locale: Locale) {
+  const t = getDictionary(locale);
   return {
     "@type": "HealthAndBeautyBusiness",
     "@id": BUSINESS_ID,
@@ -100,13 +101,16 @@ function businessNode(locale: Locale) {
     department: LOCATIONS.map((location) => ({
       "@type": "HealthAndBeautyBusiness",
       "@id": departmentId(location.slug),
-      name: `${SITE_NAME} — ${location.city}`,
-      url: `${SITE_URL}/mistsya/${location.slug}`,
+      name: `${SITE_NAME} — ${cityLabel(t, location.slug).city || location.city}`,
+      url: `${SITE_URL}${localePath(locale, `/mistsya/${location.slug}`)}`,
       telephone: CONTACTS.phone,
       email: CONTACTS.email,
       priceRange: "₴₴",
       openingHoursSpecification: OPENING_HOURS,
-      address: address(location),
+      address: address({
+        city: cityLabel(t, location.slug).city || location.city,
+        address: cityLabel(t, location.slug).address || location.address,
+      }),
     })),
   };
 }

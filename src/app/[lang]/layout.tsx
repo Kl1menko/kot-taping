@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { HtmlLang } from "@/components/html-lang";
 import { LOCALES, isLocale } from "@/lib/i18n";
+import { getDictionary } from "@/lib/dictionary";
 
 /**
  * Мовний сегмент.
@@ -29,7 +30,7 @@ export default async function LangLayout({
 
   return (
     <>
-      <HtmlLang locale={lang} />
+      <HtmlLang locale={lang} skipToContent={getDictionary(lang).a11y.skipToContent} />
       {children}
     </>
   );

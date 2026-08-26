@@ -19,7 +19,7 @@ import { useBookingModal } from "./booking-modal";
  * футера — карта сайту зі статичних посилань, і її HTML має лишатись у
  * серверному рендері, бо саме по ній краулер розходиться по категоріях.
  */
-export function FooterBookLink() {
+export function FooterBookLink({ label }: { label: string }) {
   const { open } = useBookingModal();
 
   return (
@@ -28,7 +28,7 @@ export function FooterBookLink() {
       onClick={() => open()}
       className="cursor-pointer text-ink-muted underline-offset-4 transition-colors duration-200 hover:text-ink hover:underline"
     >
-      Записатись
+      {label}
     </button>
   );
 }

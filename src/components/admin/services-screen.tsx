@@ -453,6 +453,30 @@ function ServiceForm({
             className={`${INPUT_CLS} min-h-[88px] resize-y py-3 leading-relaxed`}
           />
         </label>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-[14px] text-ink-muted">Носіння (EN)</span>
+            <input
+              name="wearEn"
+              type="text"
+              placeholder="5–10 days"
+              defaultValue={service?.wear_en ?? ""}
+              className={INPUT_CLS}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-[14px] text-ink-muted">Бейдж (EN)</span>
+            <input
+              name="badgeEn"
+              type="text"
+              placeholder="Course of 5"
+              defaultValue={service?.badge_en ?? ""}
+              className={INPUT_CLS}
+            />
+          </label>
+        </div>
       </div>
 
       <label className="block">

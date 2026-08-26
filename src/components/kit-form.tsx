@@ -16,7 +16,6 @@ import {
 } from "@/lib/intake";
 import {
   DELIVERY_COUNTRIES,
-  FACE_COLOR_NOTE,
   formatKitPrice,
   isWorldwide,
   type Kit,
@@ -347,7 +346,9 @@ export function KitForm({
                       style={{ background: SWATCH[c] }}
                     />
                   )}
-                  {c}
+                  {t.kitForm.tapeColors[
+                    c as keyof typeof t.kitForm.tapeColors
+                  ] ?? c}
                 </label>
               ))}
             </div>
@@ -355,7 +356,7 @@ export function KitForm({
         ) : (
           kit && (
             <p className="text-[14px] leading-relaxed text-ink-muted">
-              {FACE_COLOR_NOTE}
+              {t.kitForm.faceColorNote}
             </p>
           )
         )}

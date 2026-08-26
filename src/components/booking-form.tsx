@@ -312,7 +312,7 @@ export function BookingForm({
               onClick={onDone}
               className="min-h-[52px] w-full cursor-pointer rounded-full bg-ink px-8 text-[15px] text-white transition-colors duration-200 hover:bg-[#2a2a2a] sm:w-auto"
             >
-              Закрити
+              {t.form.close}
             </button>
           </div>
         )}
@@ -439,11 +439,11 @@ export function BookingForm({
 
         {!date ? (
           <p className="mt-2 text-[15px] text-ink-muted">
-            Спершу оберіть дату — покажу вільні години.
+            {t.form.pickDateFirst}
           </p>
         ) : times.length === 0 ? (
           <p className="mt-2 text-[15px] text-ink-muted">
-            На цей день вільних годин уже немає. Оберіть, будь ласка, іншу дату.
+            {t.form.noHours}
           </p>
         ) : (
           <>
@@ -502,9 +502,17 @@ export function BookingForm({
           needsHandle(c.id) ? (
             <Field
               key={c.id}
-              label={c.handleLabel!}
+              label={
+                t.form.handleLabels[
+                  c.id as keyof typeof t.form.handleLabels
+                ] ?? c.handleLabel!
+              }
               error={state.fieldErrors?.handle}
-              hint={c.hint}
+              hint={
+                t.form.channelHints[
+                  c.id as keyof typeof t.form.channelHints
+                ] ?? c.hint
+              }
             >
               <input
                 name="handle"
@@ -520,7 +528,9 @@ export function BookingForm({
             </Field>
           ) : (
             <p key={c.id} className="text-[13px] text-ink-muted">
-              {c.hint}
+              {t.form.channelHints[
+                c.id as keyof typeof t.form.channelHints
+              ] ?? c.hint}
             </p>
           ),
         )}
@@ -528,8 +538,7 @@ export function BookingForm({
 
       <Group
         title={t.form.detailsTitle}
-        hint="Необов'язково — але якщо заповните, я одразу розрахую матеріал і
-              нам не доведеться це узгоджувати листуванням."
+        hint={t.form.detailsHint}
       >
         <Field label={t.form.tapeColor}>
           <select
@@ -537,7 +546,7 @@ export function BookingForm({
             defaultValue={sent?.tapeColor ?? ""}
             className={`${INPUT_CLS} cursor-pointer`}
           >
-            <option value="">Не обрано</option>
+            <option value="">{t.form.notChosen}</option>
             {TAPE_COLORS.map((c) => (
               <option key={c} value={c}>
                 {c}

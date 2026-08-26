@@ -81,6 +81,8 @@ function parse(formData: FormData) {
     // тож незаповнене поле нічого не ламає (див. `public-services.ts`).
     titleEn: String(formData.get("titleEn") ?? "").trim(),
     summaryEn: String(formData.get("summaryEn") ?? "").trim(),
+    wearEn: String(formData.get("wearEn") ?? "").trim(),
+    badgeEn: String(formData.get("badgeEn") ?? "").trim(),
     price: String(formData.get("price") ?? "").trim(),
     priceFrom: formData.get("priceFrom") === "on",
     wear: String(formData.get("wear") ?? "").trim(),
@@ -132,6 +134,19 @@ export async function saveService(
     (TONES as readonly string[]).includes(value);
 
   const tone = isTone(input.tone) ? input.tone : "sand";
+
+  /**
+   * `wear_en`/`badge_en` (міграція 0017) додаються окремо.
+   *
+   * Поки міграцію не виконано, Postgres відхиляє весь запис через невідому
+   * колонку — і збереження послуги в адмінці падало б цілком, хоч решта
+   * полів валідна. Тому спершу пробуємо з ними, а на `42703` повторюємо без:
+   * англійські підписи просто не запишуться, доки колонки не з'являться.
+   */
+  const labelsEn = {
+    wear_en: input.wearEn || null,
+    badge_en: input.badgeEn || null,
+  };
 
   const row = {
     title: input.title,
@@ -187,10 +202,14 @@ export async function saveService(
       imageUrl = null;
     }
 
-    const { error } = await db()
-      .from("services")
-      .update({ ...row, image_url: imageUrl })
-      .eq("id", input.id);
+    const write = (extra: Record<string, unknown>) =>
+      db()
+        .from("services")
+        .update({ ...row, ...extra, image_url: imageUrl })
+        .eq("id", input.id);
+
+    let { error } = await write(labelsEn);
+    if (error?.code === "42703") ({ error } = await write({}));
 
     if (error) {
       // Рядок не змінився — щойно завантажений файл нікому не потрібен.
@@ -233,14 +252,19 @@ export async function saveService(
       .limit(1)
       .maybeSingle();
 
-    const { error } = await db()
-      .from("services")
-      .insert({
-        ...row,
-        slug,
-        image_url: imageUrl,
-        sort: (last?.sort ?? 0) + 1,
-      });
+    const write = (extra: Record<string, unknown>) =>
+      db()
+        .from("services")
+        .insert({
+          ...row,
+          ...extra,
+          slug,
+          image_url: imageUrl,
+          sort: (last?.sort ?? 0) + 1,
+        });
+
+    let { error } = await write(labelsEn);
+    if (error?.code === "42703") ({ error } = await write({}));
 
     if (error) {
       // Послуги не з'явилось — фото від неї теж лишати немає сенсу.

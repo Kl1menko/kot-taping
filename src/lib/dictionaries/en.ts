@@ -46,6 +46,22 @@ export const en = {
     kyiv: { city: "Kyiv", address: "67A Beresteiskyi Ave." },
   },
   form: {
+    close2: "Close",
+    pickDateFirst: "Choose a date first and I will show the free times.",
+    noHours: "There are no free times left on that day. Please pick another date.",
+    detailsHint:
+      "Optional — but if you fill this in I can work out the materials right " +
+      "away, and we will not need to sort it out by message.",
+    notChosen: "Not chosen",
+    channelHints: {
+      telegram: "If you have no handle, I will call the number from the form.",
+      instagram: "I will find you by your handle to confirm the booking.",
+      phone: "I will call the number you entered above.",
+    },
+    handleLabels: {
+      telegram: "Telegram handle",
+      instagram: "Instagram handle",
+    },
     heading: "Send a request",
     close: "Close",
     chooseService: "Choose a service",
@@ -237,6 +253,21 @@ export const en = {
       "the treatment — I will write to you to go through the details.",
   },
   kitForm: {
+    faceColorNote: "White tape is used on the face.",
+    /**
+     * Ключ — українське значення з `intake.ts`: воно йде в базу й у
+     * повідомлення майстрині, тож перекладається лише підпис на екрані.
+     */
+    tapeColors: {
+      "Бежевий": "Beige",
+      "Чорний": "Black",
+      "Білий": "White",
+      "Синій": "Blue",
+      "Рожевий": "Pink",
+      "Блакитний": "Light blue",
+      "Зелений": "Green",
+      "На ваш розсуд": "Your choice",
+    },
     delivery: "Delivery",
     deliveryTo: "Where to send it",
     sectionLabel: "Home taping",

@@ -55,7 +55,7 @@ export function SiteFooter({
             >
               {CONTACTS.email}
             </a>
-            <FooterBookLink />
+            <FooterBookLink label={t.hero.book} />
           </nav>
         </div>
       </div>
