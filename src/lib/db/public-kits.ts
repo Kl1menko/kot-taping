@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "./client";
 import { KITS, type Kit } from "@/lib/kits";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 
 /**
  * Набори для лендінгу — з бази, з відкатом на константи з `kits.ts`.
@@ -10,12 +11,14 @@ import { KITS, type Kit } from "@/lib/kits";
  * зникати з вітрини через невиконану міграцію чи незадані змінні Supabase.
  * Ціни в такому разі показуються як «уточнюється» — див. `formatKitPrice`.
  */
-export async function listPublicKits(): Promise<Kit[]> {
+export async function listPublicKits(
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<Kit[]> {
   try {
     const { data, error } = await db()
       .from("kits")
       .select(
-        "slug, title, summary, price, price_from, zone, allows_color, needs_measurements, sort",
+        "slug, title, title_en, summary, summary_en, price, price_from, zone, allows_color, needs_measurements, sort",
       )
       .eq("is_active", true)
       .order("sort");
@@ -25,8 +28,9 @@ export async function listPublicKits(): Promise<Kit[]> {
 
     return data.map((row) => ({
       slug: row.slug,
-      title: row.title,
-      summary: row.summary,
+      // Порожній переклад = показуємо український текст, як і в прайсі послуг.
+      title: (locale === "en" && row.title_en) || row.title,
+      summary: (locale === "en" && row.summary_en) || row.summary,
       price: row.price,
       priceFrom: row.price_from,
       zone: row.zone,

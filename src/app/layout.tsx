@@ -5,6 +5,8 @@ import { Preloader } from "@/components/preloader";
 import { Analytics } from "@/components/analytics";
 import { SITE_URL } from "@/lib/site";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
+import { DEFAULT_LOCALE, HTML_LANG } from "@/lib/i18n";
+import { getDictionary } from "@/lib/dictionary";
 
 const grotesque = Manrope({
   subsets: ["latin", "cyrillic"],
@@ -103,12 +105,28 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  /**
+   * `<html lang>` тут — українська за замовчуванням, а англійські сторінки
+   * перевизначають його клієнтським хелпером із `[lang]/layout.tsx`.
+   *
+   * Чому не `next/root-params`: його експорти з'являються лише коли кореневий
+   * layout лежить під динамічним сегментом. У нас поза `[lang]` живуть
+   * адмінка, /payment і 404 — їм потрібен цей же каркас, тож перенести
+   * `<html>` під `[lang]` не можна.
+   */
+  const locale = DEFAULT_LOCALE;
+  const t = getDictionary(locale);
+
   // suppressHydrationWarning — лише для <html>: розширення браузера
   // (LanguageTool, Grammarly тощо) дописують сюди свої атрибути ще до
   // гідратації, і React лається на різницю, якої в нашому коді немає.
   // Прапорець діє на атрибути самого тега, не на вміст сторінки.
   return (
-    <html lang="uk" className={grotesque.variable} suppressHydrationWarning>
+    <html
+      lang={HTML_LANG[locale]}
+      className={grotesque.variable}
+      suppressHydrationWarning
+    >
       <body className="min-h-dvh antialiased">
         <Preloader />
         {/*
@@ -122,7 +140,7 @@ export default function RootLayout({
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-ink focus:px-6 focus:py-3 focus:text-[15px] focus:text-white"
         >
-          Перейти до вмісту
+          {t.a11y.skipToContent}
         </a>
         {children}
 

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { TONE_CLASS, formatPrice, type Service } from "@/lib/services";
 import { BookNowButton } from "./book-now-button";
+import type { Dictionary } from "@/lib/dictionary";
 
 /**
  * Перелік послуг категорії.
@@ -22,7 +23,13 @@ import { BookNowButton } from "./book-now-button";
  * `sand`/`clay`/`blush` уже в даних, розрізняють сусідні картки й тримають ту
  * саму палітру, що й лендінг.
  */
-export function ServiceList({ services }: { services: Service[] }) {
+export function ServiceList({
+  services,
+  t,
+}: {
+  services: Service[];
+  t: Dictionary;
+}) {
   return (
     <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {services.map((service) => {
@@ -87,9 +94,9 @@ export function ServiceList({ services }: { services: Service[] }) {
                   )}
                   <BookNowButton
                     service={service.slug}
-                    aria-label={`Записатись на «${service.title}»`}
+                    aria-label={t.services.bookAria.replace("{service}", service.title)}
                   >
-                    Записатись
+                    {t.services.book}
                   </BookNowButton>
                 </div>
               </div>

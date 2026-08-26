@@ -1,18 +1,20 @@
 import { Card, Container, SectionLabel } from "./ui";
-import { TESTIMONIALS as REVIEWS } from "@/lib/content";
+import type { Dictionary } from "@/lib/dictionary";
 
-export function Testimonials() {
+export function Testimonials({ t }: { t: Dictionary }) {
+  const reviews = t.testimonials.items;
+
   return (
     <Card as="section" className="py-20 md:py-28">
       <Container>
-      <SectionLabel>Відгуки</SectionLabel>
+      <SectionLabel>{t.testimonials.label}</SectionLabel>
 
       <h2 className="mx-auto mt-10 max-w-[22ch] text-center text-[30px] leading-[1.15] sm:text-[40px] lg:text-[46px]">
-        Що кажуть клієнти після курсу
+        {t.testimonials.title}
       </h2>
 
       <ul className="mt-12 grid gap-5 md:grid-cols-3">
-        {REVIEWS.map((review) => (
+        {reviews.map((review) => (
           <li
             key={review.author}
             className="flex flex-col rounded-[var(--radius-tile)] bg-canvas p-6 md:p-8"

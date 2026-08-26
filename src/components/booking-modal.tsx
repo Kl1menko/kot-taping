@@ -12,6 +12,7 @@ import {
 import { BookingForm } from "./booking-form";
 import type { Service } from "@/lib/services";
 import type { WorkingDay } from "@/lib/schedule";
+import type { Dictionary } from "@/lib/dictionary";
 
 type BookingModalContext = {
   /** Opens the sheet, optionally preselecting a service by slug. */
@@ -33,8 +34,10 @@ export function BookingModalProvider({
   children,
   services,
   schedule = {},
+  t,
 }: {
   children: ReactNode;
+  t: Dictionary;
   /** Прайс із бази — той самий список, що й у картках послуг. */
   services: Service[];
   /** Робочі дні по кабінетах: slug → відкриті дні. Порожньо — запис закрито. */
@@ -120,20 +123,21 @@ export function BookingModalProvider({
               <div className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-[max(1.5rem,env(safe-area-inset-top))] sm:px-8 sm:pt-6">
                 <div>
                   <p className="text-[15px] text-ink-muted">
-                    <span aria-hidden="true">/ </span>Запис
+                    <span aria-hidden="true">/ </span>
+                    {t.booking.label}
                   </p>
                   <h2
                     id="booking-modal-title"
                     className="mt-2 text-[24px] leading-tight sm:text-[28px]"
                   >
-                    Залиште заявку
+                    {t.form.heading}
                   </h2>
                 </div>
 
                 <button
                   type="button"
                   onClick={close}
-                  aria-label="Закрити"
+                  aria-label={t.form.close}
                   className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-canvas text-ink transition-colors duration-200 hover:bg-line"
                 >
                   <svg
@@ -157,6 +161,7 @@ export function BookingModalProvider({
                   preselected={service}
                   onDone={close}
                   fullWidthSubmit
+                  t={t}
                 />
               </div>
             </div>

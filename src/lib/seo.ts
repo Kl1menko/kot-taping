@@ -14,6 +14,14 @@
 import type { Metadata } from "next";
 import { CATEGORIES, type ServiceCategory } from "./services.ts";
 import { LOCATIONS } from "./contacts.ts";
+import { cityLabel, getDictionary } from "./dictionary.ts";
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  OG_LOCALE,
+  localePath,
+  type Locale,
+} from "./i18n.ts";
 
 export const SITE_NAME = "Kotova Taping";
 
@@ -31,6 +39,7 @@ export const SITE_DESCRIPTION =
  * розсинхронити з `SITE_URL`.
  */
 export function pageMetadata({
+  locale = DEFAULT_LOCALE,
   title,
   description,
   path,
@@ -38,6 +47,8 @@ export function pageMetadata({
   image,
   noIndex,
 }: {
+  /** Мова сторінки. Визначає canonical, hreflang та og:locale. */
+  locale?: Locale;
   /** Без суфікса «· Kotova Taping» — його додає `template` у layout. */
   title: string;
   description: string;
@@ -52,15 +63,32 @@ export function pageMetadata({
   // назви студії прев'ю у месенджері втрачає, чиє воно.
   const ogTitle = path === "/" ? title : `${title} · ${SITE_NAME}`;
 
+  /**
+   * `hreflang` для обох мов + `x-default`.
+   *
+   * Без цього Google трактує /en як дубль головної й лишає у видачі лише
+   * одну з версій — зазвичай не ту, якою людина шукала. `x-default` вказує,
+   * куди вести тих, чия мова не збігається з жодною нашою.
+   */
+  const languages = Object.fromEntries(
+    LOCALES.map((l) => [l, localePath(l, path)]),
+  );
+
   return {
     title,
     description,
     ...(keywords?.length ? { keywords } : {}),
-    alternates: { canonical: path },
+    alternates: {
+      canonical: localePath(locale, path),
+      languages: {
+        ...languages,
+        "x-default": localePath(DEFAULT_LOCALE, path),
+      },
+    },
     openGraph: {
       type: "website",
-      locale: "uk_UA",
-      url: path,
+      locale: OG_LOCALE[locale],
+      url: localePath(locale, path),
       siteName: SITE_NAME,
       title: ogTitle,
       description,
@@ -104,7 +132,7 @@ export type CategorySeo = {
   keywords: string[];
 };
 
-export const CATEGORY_SEO: Record<ServiceCategory, CategorySeo> = {
+const CATEGORY_SEO_UK: Record<ServiceCategory, CategorySeo> = {
   muscle: {
     heading: "М'язеві корекції тейпами",
     description:
@@ -217,8 +245,149 @@ export const CATEGORY_SEO: Record<ServiceCategory, CategorySeo> = {
   },
 };
 
+
+/**
+ * Англійські тексти категорій.
+ *
+ * Не переклад слово в слово: пошукові запити англійською інші, тож `keywords`
+ * зібрані під них («kinesio taping face», «lymphatic taping»), а не
+ * транслітеровані з українських. Медичні формулювання й терміни носіння
+ * передані точно.
+ */
+const CATEGORY_SEO_EN: Record<ServiceCategory, CategorySeo> = {
+  muscle: {
+    heading: "Muscle taping",
+    description:
+      "Taping for the back, posture and diastasis: pain relief, support and " +
+      "a physiological position held in place. With an exercise plan. Lviv " +
+      "and Kyiv.",
+    intro:
+      "Muscle taping takes the load off an overworked muscle and holds the " +
+      "joint in a physiological position. The tape works around the clock — " +
+      "under clothing, in movement and in your sleep — so the effect builds " +
+      "between sessions. Every application comes with an exercise plan that " +
+      "carries the result further.",
+    keywords: [
+      "muscle taping",
+      "kinesio taping back",
+      "posture taping",
+      "diastasis taping",
+      "kinesiology taping",
+    ],
+  },
+  neuro: {
+    heading: "Neurological taping",
+    description:
+      "Comprehensive work with muscular dystonia and two-stage testing. " +
+      "Neurological taping at Kotova Taping — Lviv and Kyiv.",
+    intro:
+      "Neurological taping addresses muscular-dystonic patterns: the " +
+      "application follows two-stage testing rather than a template. That " +
+      "means it accounts for your particular pattern of tension, and after " +
+      "the session we check how your body responded.",
+    keywords: [
+      "neurological taping",
+      "kinesio taping neurology",
+      "muscular dystonia taping",
+    ],
+  },
+  "lymph-body": {
+    heading: "Body lymphatic drainage taping",
+    description:
+      "Abdomen, arms, legs, buttocks, chest: less swelling and volume, " +
+      "better skin tone, a lifting effect. Post-surgery and lymphoedema. " +
+      "Lviv and Kyiv.",
+    intro:
+      "A lymphatic drainage application lifts the skin above the fascia and " +
+      "opens a path for the lymph — swelling subsides, volume goes down, the " +
+      "skin tightens. The tape stays on for 14 to 16 days and works the whole " +
+      "time, which is why one treatment does more than a course of massage of " +
+      "the same length. Separate applications exist for post-operative " +
+      "recovery and for lymphoedema after lymph node dissection.",
+    keywords: [
+      "lymphatic drainage taping",
+      "abdominal taping",
+      "leg taping",
+      "body lymphatic drainage",
+      "cellulite taping",
+      "post surgery taping",
+      "lymphedema taping",
+    ],
+  },
+  "lymph-face": {
+    heading: "Face and neck lymphatic drainage taping",
+    description:
+      "Reduces facial swelling, a double chin and neck rings. Work on the " +
+      "upper back hump. As a course or a single treatment. Lviv and Kyiv.",
+    intro:
+      "Facial swelling is not simply your features — it is stagnant lymph, " +
+      "and it responds well to treatment. An application across the face and " +
+      "neck clears morning puffiness, works on a double chin and on the rings " +
+      "around the neck. A separate application for the upper back hump " +
+      "restores neck mobility and relieves the headaches that come from " +
+      "congestion at the seventh cervical vertebra.",
+    keywords: [
+      "facial lymphatic drainage taping",
+      "face taping for swelling",
+      "neck taping",
+      "double chin taping",
+      "kinesio taping face",
+    ],
+  },
+  "face-modeling": {
+    heading: "Facial contouring tape",
+    description:
+      "Lip lines, forehead wrinkles, cheek lymphatic drainage. Lifting " +
+      "without injections — as a course, with visible results. Lviv and Kyiv.",
+    intro:
+      "Contouring tape relaxes the muscle holding a wrinkle in place while " +
+      "lifting the tissue above it. It is not a substitute for injections but " +
+      "a different route: slower, yet with no needle and with natural " +
+      "expression preserved. Done as a course of 3, 5 or 10 treatments " +
+      "depending on the area.",
+    keywords: [
+      "facial contouring tape",
+      "taping for wrinkles",
+      "lip lines tape",
+      "forehead wrinkles taping",
+      "face lifting without injections",
+      "cheek taping",
+    ],
+  },
+  sets: {
+    heading: "Facial taping courses",
+    description:
+      "Complete courses of 3, 5 and 7 treatments: forehead, nasolabial and " +
+      "lip lines together. Better value than separate areas. Lviv and Kyiv.",
+    intro:
+      "Three areas of the face in a single course: the forehead, the " +
+      "nasolabial area and around the mouth. Together they work better than " +
+      "any one alone — the face changes evenly, without one lifted area " +
+      "sitting next to the rest. A course of 3, 5 or 7 treatments depending " +
+      "on where you start.",
+    keywords: [
+      "facial taping course",
+      "taping set",
+      "three zone taping",
+      "complete facial taping",
+    ],
+  },
+};
+
+/** Тексти категорій потрібною мовою. */
+export function categorySeo(
+  id: ServiceCategory,
+  locale: Locale = DEFAULT_LOCALE,
+): CategorySeo {
+  return (locale === "en" ? CATEGORY_SEO_EN : CATEGORY_SEO_UK)[id];
+}
+
 /** Ярлик категорії з меню — щоб не тягнути `CATEGORIES` у кожен компонент. */
-export function categoryLabel(id: ServiceCategory): string {
+export function categoryLabel(
+  id: ServiceCategory,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  if (locale === "en") return getDictionary("en").categories[id].label;
   return CATEGORIES.find((c) => c.id === id)?.label ?? id;
 }
 
@@ -234,7 +403,7 @@ export type CitySeo = {
   landmark: string;
 };
 
-export const CITY_SEO: Record<string, CitySeo> = {
+const CITY_SEO_UK: Record<string, CitySeo> = {
   lviv: {
     locative: "у Львові",
     description:
@@ -272,9 +441,63 @@ export const CITY_SEO: Record<string, CitySeo> = {
   },
 };
 
-/** Місто за slug — разом з адресою з `contacts.ts`. */
-export function cityBySlug(slug: string) {
+
+/** Англійські тексти сторінок міст. Адреси транслітеровані, не перекладені. */
+const CITY_SEO_EN: Record<string, CitySeo> = {
+  lviv: {
+    locative: "in Lviv",
+    description:
+      "Aesthetic taping studio in Lviv, 204b Zelena St. Face and body " +
+      "lymphatic drainage, contouring, muscle support. Booking by phone.",
+    intro:
+      "The Lviv studio is at 204b Zelena Street. People come here for facial " +
+      "lymphatic drainage before an event, for a course of contouring, and " +
+      "for work on body swelling. By appointment only, so there is time for " +
+      "everyone without rushing.",
+    keywords: [
+      "taping Lviv",
+      "lymphatic drainage taping Lviv",
+      "aesthetic taping Lviv",
+      "face taping Lviv",
+    ],
+    landmark: "Zelena",
+  },
+  kyiv: {
+    locative: "in Kyiv",
+    description:
+      "Aesthetic taping studio in Kyiv, 67A Beresteiskyi Ave. Face and body " +
+      "lymphatic drainage, contouring, muscle support. Booking by phone.",
+    intro:
+      "The Kyiv studio is at 67A Beresteiskyi Avenue. The same list of " +
+      "treatments and the same approach as in Lviv: the application is chosen " +
+      "for your concern, not from a template. By appointment only.",
+    keywords: [
+      "taping Kyiv",
+      "lymphatic drainage taping Kyiv",
+      "aesthetic taping Kyiv",
+      "face taping Kyiv",
+    ],
+    landmark: "Beresteiskyi",
+  },
+};
+
+/**
+ * Місто за slug — разом з адресою.
+ *
+ * Назва міста й адреса приходять зі словника, а не з `contacts.ts`: там вони
+ * лише українською, і англійська сторінка показувала б «Львів» посеред
+ * англійського тексту.
+ */
+export function cityBySlug(slug: string, locale: Locale = DEFAULT_LOCALE) {
   const location = LOCATIONS.find((l) => l.slug === slug);
-  const seo = CITY_SEO[slug];
-  return location && seo ? { ...location, ...seo } : null;
+  const seo = (locale === "en" ? CITY_SEO_EN : CITY_SEO_UK)[slug];
+  if (!location || !seo) return null;
+
+  const label = cityLabel(getDictionary(locale), slug);
+  return {
+    ...location,
+    ...seo,
+    city: label.city || location.city,
+    address: label.address || location.address,
+  };
 }

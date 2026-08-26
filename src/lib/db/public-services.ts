@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "./client";
 import { SERVICES, type Service, type ServiceCategory } from "@/lib/services";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 
 /**
  * Прайс для лендінгу — з бази, з відкатом на константи з `services.ts`.
@@ -14,6 +15,11 @@ import { SERVICES, type Service, type ServiceCategory } from "@/lib/services";
  *
  * Порожня таблиця обробляється так само: `db:seed` ще не запускали, отже
  * джерелом правди лишається код.
+ *
+ * Мова підставляється тут, а не в компонентах: картки, форма запису й
+ * schema.org читають `title`/`summary`, і жодному з них не треба знати, що
+ * перекладів два. Порожній `title_en` означає «переклад ще не написали» —
+ * тоді показуємо український текст, а не порожню назву послуги.
  */
 
 /** Категорії з БД можуть містити те, чого немає в коді, — звідси перевірка. */
@@ -28,12 +34,14 @@ const KNOWN_CATEGORIES = new Set<string>(
   ]),
 );
 
-export async function listPublicServices(): Promise<Service[]> {
+export async function listPublicServices(
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<Service[]> {
   try {
     const { data, error } = await db()
       .from("services")
       .select(
-        "slug, title, summary, price, price_from, wear, badge, category, tone, image_url, sort",
+        "slug, title, title_en, summary, summary_en, price, price_from, wear, badge, category, tone, image_url, sort",
       )
       .eq("is_active", true)
       .order("sort");
@@ -45,8 +53,8 @@ export async function listPublicServices(): Promise<Service[]> {
       .filter((row) => KNOWN_CATEGORIES.has(row.category))
       .map((row) => ({
         slug: row.slug,
-        title: row.title,
-        summary: row.summary,
+        title: (locale === "en" && row.title_en) || row.title,
+        summary: (locale === "en" && row.summary_en) || row.summary,
         price: row.price,
         // `priceFrom`/`wear`/`badge` необов'язкові в типі, а в БД — nullable.
         // Приводимо до форми, яку вже очікують картки лендінгу.

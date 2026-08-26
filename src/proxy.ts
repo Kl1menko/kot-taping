@@ -1,38 +1,106 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { decryptSession, SESSION_COOKIE } from "@/lib/auth/session";
+import {
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  isLocale,
+  localeFromAcceptLanguage,
+} from "@/lib/i18n";
 
 /**
- * У Next.js 16 middleware називається Proxy — файл має лежати поруч із `app`.
+ * Визначення мови до рендеру сторінки.
  *
- * Перевірка тут оптимістична: вона лише прибирає зайвий рендер і редиректить
- * гостя на логін. Справжня авторизація — `requireSession()` у кожній сторінці
- * та Server Action, бо Proxy не бачить прямих викликів екшенів і не має
- * ходити в базу (виконується на кожен запит, включно з префетчами).
+ * У Next 16 файл називається `proxy`, а не `middleware` — стара назва
+ * позначена як deprecated.
+ *
+ * Модель маршрутів:
+ *   /            → rewrite на /uk            (українська без префікса в URL)
+ *   /en          → лишається як є
+ *   /poslugy     → rewrite на /uk/poslugy
+ *
+ * Rewrite, а не redirect: адреса в рядку браузера не змінюється, тож
+ * проіндексовані посилання лишаються чинними, а `app/[lang]` усе одно отримує
+ * локаль параметром.
+ *
+ * Автовизначення працює один раз і тільки на корені. Перекидати людину з
+ * будь-якої внутрішньої сторінки означало б ламати прямі посилання: хтось
+ * надіслав /poslugy/lymph-face — і англомовний браузер відкрив би замість
+ * цього іншу сторінку. На корені ж вибір мови нічого не коштує.
+ *
+ * Cookie запам'ятовує ЛИШЕ свідомий вибір — клік по перемикачу, який додає
+ * `?lang=`. Раніше вона писалась на кожному перегляді /en, і це замикало
+ * людину в англійській: клік на «UA» вів на «/», proxy бачив там `lang=en`
+ * і кидав назад на /en. Вийти з такої петлі було неможливо.
  */
-export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
 
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const session = await decryptSession(token);
+/** Позначка свідомого вибору мови — її ставить перемикач у посиланні. */
+const CHOICE_PARAM = "lang";
 
-  if (pathname === "/admin/login") {
-    // Уже залогінений — на логіні йому робити нічого.
-    if (session) {
-      return NextResponse.redirect(new URL("/admin", req.nextUrl));
+/** Куди proxy не втручається: статика, API, службові файли, адмінка. */
+const SKIP = /^\/(?:_next|api|admin|images|icons|video|favicon|sw\.js|manifest|robots|sitemap|opengraph-image)/;
+
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (SKIP.test(pathname)) return NextResponse.next();
+
+  const isEnglish = pathname === "/en" || pathname.startsWith("/en/");
+  const chosen = request.nextUrl.searchParams.get(CHOICE_PARAM);
+
+  /**
+   * Клік по перемикачу: запам'ятовуємо вибір і прибираємо позначку з адреси.
+   *
+   * Редирект, а не тихий запис: інакше `?lang=uk` лишався б у рядку браузера,
+   * потрапляв у поділені посилання й дублював би сторінку для пошуковика.
+   */
+  if (chosen && isLocale(chosen)) {
+    const clean = request.nextUrl.clone();
+    clean.searchParams.delete(CHOICE_PARAM);
+
+    const response = NextResponse.redirect(clean);
+    response.cookies.set(LOCALE_COOKIE, chosen, {
+      path: "/",
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+    return response;
+  }
+
+  // Англійська вже в шляху — рендеримо як є.
+  if (isEnglish) return NextResponse.next();
+
+  /**
+   * Корінь: одноразове автовизначення.
+   *
+   * Cookie має пріоритет над `Accept-Language`: якщо людина натиснула
+   * перемикач, її вибір важливіший за налаштування системи — інакше кожен
+   * захід на головну скидав би його назад.
+   */
+  if (pathname === "/") {
+    const saved = request.cookies.get(LOCALE_COOKIE)?.value;
+    const locale =
+      saved && isLocale(saved)
+        ? saved
+        : localeFromAcceptLanguage(request.headers.get("accept-language"));
+
+    if (locale !== DEFAULT_LOCALE) {
+      return NextResponse.redirect(new URL("/en", request.url));
     }
-    return NextResponse.next();
   }
 
-  if (!session) {
-    const login = new URL("/admin/login", req.nextUrl);
-    // Щоб після входу повернути туди, куди людина йшла.
-    if (pathname !== "/admin") login.searchParams.set("from", pathname);
-    return NextResponse.redirect(login);
-  }
-
-  return NextResponse.next();
+  // Українська: непомітний rewrite у сегмент [lang].
+  const url = request.nextUrl.clone();
+  url.pathname = `/${DEFAULT_LOCALE}${pathname === "/" ? "" : pathname}`;
+  return NextResponse.rewrite(url);
 }
 
+
 export const config = {
-  matcher: ["/admin/:path*"],
+  /**
+   * Виключаємо статику й службові шляхи ще на рівні matcher, а не лише в коді:
+   * без цього proxy виконувався б на кожній картинці й кожному чанку JS.
+   */
+  matcher: [
+    "/((?!_next/static|_next/image|api|admin|images|icons|video|favicon.ico|sw.js).*)",
+  ],
 };

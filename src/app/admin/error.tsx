@@ -86,6 +86,11 @@ export default function AdminError({
         >
           {stale ? "Оновити" : "Спробувати ще"}
         </button>
+        {/* Навмисно `<a>`, а не `<Link>`: сторінка вже в помилковому стані,
+            і клієнтський перехід лишив би той самий зламаний JS. Потрібне
+            повне перезавантаження документа — рівно те, чого `<Link>`
+            уникає. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a
           href="/admin"
           className="inline-flex min-h-[52px] items-center rounded-full border border-line px-7 text-[15px] transition-colors duration-200 hover:border-ink"

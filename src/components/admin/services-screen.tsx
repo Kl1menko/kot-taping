@@ -425,6 +425,36 @@ function ServiceForm({
         />
       </label>
 
+      {/* Англійська версія — окремим блоком під українською, а не поруч:
+          поля необов'язкові, і сусідство в один ряд робило б їх схожими на
+          обов'язкові. Порожньо = на /en показується український текст. */}
+      <div className="space-y-5 rounded-2xl bg-canvas p-4">
+        <p className="text-[13px] text-ink-muted">
+          Англійська версія — для сторінок /en. Порожньо: показується
+          український текст.
+        </p>
+
+        <label className="block">
+          <span className="text-[14px] text-ink-muted">Назва (EN)</span>
+          <input
+            name="titleEn"
+            type="text"
+            defaultValue={service?.title_en ?? ""}
+            className={INPUT_CLS}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-[14px] text-ink-muted">Опис (EN)</span>
+          <textarea
+            name="summaryEn"
+            rows={3}
+            defaultValue={service?.summary_en ?? ""}
+            className={`${INPUT_CLS} min-h-[88px] resize-y py-3 leading-relaxed`}
+          />
+        </label>
+      </div>
+
       <label className="block">
         <span className="text-[14px] text-ink-muted">Категорія</span>
         <select

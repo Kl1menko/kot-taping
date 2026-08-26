@@ -7,6 +7,7 @@ import { CATEGORIES, formatPrice, type Service } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
 import { INPUT_CLS } from "@/lib/form";
+import { cityLabel, type Dictionary } from "@/lib/dictionary";
 import { DatePicker } from "./date-picker";
 import {
   formatTime,
@@ -137,7 +138,7 @@ function Choice({
   );
 }
 
-function SubmitButton({ full }: { full?: boolean }) {
+function SubmitButton({ full, t }: { full?: boolean; t: Dictionary }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -149,7 +150,7 @@ function SubmitButton({ full }: { full?: boolean }) {
         full ? "w-full justify-between" : "",
       ].join(" ")}
     >
-      {pending ? "Надсилаю…" : "Надіслати заявку"}
+      {pending ? t.form.submitting : t.form.submit}
       <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-ink transition-transform duration-200 group-hover:translate-x-0.5">
         <svg
           viewBox="0 0 24 24"
@@ -175,7 +176,9 @@ export function BookingForm({
   /** Rendered in the modal: lets the sheet close itself from the success state. */
   onDone,
   fullWidthSubmit,
+  t,
 }: {
+  t: Dictionary;
   /** Прайс із бази: у списку лише те, на що справді можна записатись. */
   services: Service[];
   /**
@@ -272,7 +275,7 @@ export function BookingForm({
         </span>
 
         <h3 className="mt-7 text-[26px] leading-tight sm:text-[30px]">
-          Заявку надіслано
+          {t.form.sentTitle}
         </h3>
         <p className="mx-auto mt-3 max-w-[38ch] text-[16px] leading-relaxed text-ink-muted">
           {state.message}
@@ -280,9 +283,9 @@ export function BookingForm({
 
         <div className="mx-auto mt-6 max-w-[38ch] rounded-2xl bg-canvas px-5 py-4">
           <p className="text-[15px] leading-relaxed text-ink-muted">
-            Якщо питання термінове — напишіть напряму:
+            {t.form.urgent}
           </p>
-          <nav aria-label="Соцмережі" className="mt-3 flex justify-center gap-2">
+          <nav aria-label={t.nav.socials} className="mt-3 flex justify-center gap-2">
             {SOCIALS.map((s) => (
               <a
                 key={s.id}
@@ -321,7 +324,7 @@ export function BookingForm({
       noValidate
       className="space-y-6"
     >
-      <Field label="Ім'я" error={state.fieldErrors?.name}>
+      <Field label={t.form.name} error={state.fieldErrors?.name}>
         <input
           name="name"
           type="text"
@@ -334,9 +337,9 @@ export function BookingForm({
       </Field>
 
       <Field
-        label="Телефон"
+        label={t.form.phone}
         error={state.fieldErrors?.phone}
-        hint="Потрібен для підтвердження запису"
+        hint={t.form.phoneHint}
       >
         <input
           name="phone"
@@ -351,7 +354,7 @@ export function BookingForm({
         />
       </Field>
 
-      <Field label="Послуга" error={state.fieldErrors?.service}>
+      <Field label={t.form.service} error={state.fieldErrors?.service}>
         <select
           name="service"
           required
@@ -360,7 +363,7 @@ export function BookingForm({
           className={`${INPUT_CLS} cursor-pointer`}
         >
           <option value="" disabled>
-            Оберіть послугу
+            {t.form.chooseService}
           </option>
           {CATEGORIES.map((cat) => {
             const items = services.filter((s) => s.category === cat.id);
@@ -368,7 +371,7 @@ export function BookingForm({
             if (items.length === 0) return null;
 
             return (
-              <optgroup key={cat.id} label={cat.label}>
+              <optgroup key={cat.id} label={t.categories[cat.id].label}>
                 {items.map((s) => (
                   <option key={s.slug} value={s.slug}>
                     {s.title} — {formatPrice(s)}
@@ -380,7 +383,7 @@ export function BookingForm({
         </select>
       </Field>
 
-      <Field label="Кабінет" error={state.fieldErrors?.location}>
+      <Field label={t.form.location} error={state.fieldErrors?.location}>
         <select
           name="location"
           required
@@ -396,17 +399,18 @@ export function BookingForm({
           className={`${INPUT_CLS} cursor-pointer`}
         >
           <option value="" disabled>
-            Оберіть місто
+            {t.form.chooseCity}
           </option>
           {LOCATIONS.map((l) => (
             <option key={l.slug} value={l.slug}>
-              {l.city} — {l.address}
+              {cityLabel(t, l.slug).city || l.city} —{" "}
+              {cityLabel(t, l.slug).address || l.address}
             </option>
           ))}
         </select>
       </Field>
 
-      <Field label="Бажана дата" error={state.fieldErrors?.date}>
+      <Field label={t.form.date} error={state.fieldErrors?.date}>
         <DatePicker
           key={location}
           name="date"
@@ -423,7 +427,7 @@ export function BookingForm({
         />
       </Field>
 
-      <Field label="Час" error={state.fieldErrors?.time}>
+      <Field label={t.form.time} error={state.fieldErrors?.time}>
         {/* Значення для Server Action: сітка кнопок сама нічого не шле. */}
         <input type="hidden" name="time" value={time} />
 
@@ -463,16 +467,16 @@ export function BookingForm({
             </div>
             <span className="mt-1.5 block text-[13px] text-ink-muted">
               {dayHours
-                ? `Цього дня працюю ${hoursLabel(dayHours)}.`
-                : "Оберіть зручну годину."}
+                ? t.form.timeHours.replace("{hours}", hoursLabel(dayHours))
+                : t.form.timeHint}
             </span>
           </>
         )}
       </Field>
 
       <Group
-        title="Як із вами зв'язатися"
-        hint="Напишу підтвердження з деталями запису."
+        title={t.form.contactTitle}
+        hint={t.form.contactHint}
       >
         <div className="grid grid-cols-3 gap-2">
           {CONTACT_CHANNELS.map((c) => (
@@ -483,7 +487,7 @@ export function BookingForm({
               defaultChecked={(sent?.channel || "telegram") === c.id}
               onSelect={(v) => setChannel(v as ContactChannel)}
             >
-              {c.label}
+              {t.form.channels[c.id as keyof typeof t.form.channels] ?? c.label}
             </Choice>
           ))}
         </div>
@@ -517,11 +521,11 @@ export function BookingForm({
       </Group>
 
       <Group
-        title="Деталі процедури"
+        title={t.form.detailsTitle}
         hint="Необов'язково — але якщо заповните, я одразу розрахую матеріал і
               нам не доведеться це узгоджувати листуванням."
       >
-        <Field label="Колір тейпу">
+        <Field label={t.form.tapeColor}>
           <select
             name="tape_color"
             defaultValue={sent?.tapeColor ?? ""}
@@ -536,7 +540,7 @@ export function BookingForm({
           </select>
         </Field>
 
-        <Field label="Зріст, см" error={state.fieldErrors?.height}>
+        <Field label={t.form.height} error={state.fieldErrors?.height}>
           <input
             name="height"
             type="text"
@@ -548,7 +552,7 @@ export function BookingForm({
           />
         </Field>
 
-        <Field label="Об'єми" hint="Наприклад: талія 68, стегна 95.">
+        <Field label={t.form.measurements} hint={t.form.measurementsHint}>
           <textarea
             name="measurements"
             rows={2}
@@ -559,9 +563,8 @@ export function BookingForm({
       </Group>
 
       <Group
-        title="Протипоказання"
-        hint="Відмітьте, якщо щось із цього вас стосується. Це не відмова — ми
-              просто обговоримо деталі до візиту, а не після нього."
+        title={t.form.contraTitle}
+        hint={t.form.contraHint}
       >
         <div className="space-y-1">
           {CONTRAINDICATIONS.map((c) => (
@@ -576,13 +579,17 @@ export function BookingForm({
                 defaultChecked={sent?.contraindications.includes(c.id) ?? false}
                 className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
               />
-              <span className="text-[15px] leading-snug">{c.label}</span>
+              <span className="text-[15px] leading-snug">
+                {t.form.contraindications[
+                  c.id as keyof typeof t.form.contraindications
+                ] ?? c.label}
+              </span>
             </label>
           ))}
         </div>
       </Group>
 
-      <Field label="Коментар (необов'язково)">
+      <Field label={t.form.note}>
         <textarea
           name="note"
           rows={3}
@@ -602,7 +609,7 @@ export function BookingForm({
             className="mt-0.5 size-5 shrink-0 cursor-pointer accent-ink"
           />
           <span className="text-[14px] leading-relaxed text-ink-muted">
-            Погоджуюсь на обробку персональних даних для запису на процедуру.
+            {t.form.consent}
           </span>
         </label>
         {state.fieldErrors?.consent && (
@@ -619,7 +626,7 @@ export function BookingForm({
       )}
 
       <div className="pt-2">
-        <SubmitButton full={fullWidthSubmit} />
+        <SubmitButton full={fullWidthSubmit} t={t} />
       </div>
     </form>
   );

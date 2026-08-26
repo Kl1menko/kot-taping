@@ -1,20 +1,15 @@
 import Image from "next/image";
 import { Card, SectionLabel } from "./ui";
+import type { Dictionary } from "@/lib/dictionary";
 
-const FACTS = [
-  { value: "6", label: "років практики" },
-  { value: "900+", label: "проведених сеансів" },
-  { value: "4", label: "профільні сертифікації" },
-];
-
-export function About() {
+export function About({ t }: { t: Dictionary }) {
   return (
     <Card as="section" id="about">
       <div className="grid lg:grid-cols-[1fr_1.1fr]">
         <div className="relative min-h-[420px] bg-clay lg:min-h-[620px]">
           <Image
             src="/images/about-portrait.jpg"
-            alt="Моделююче тейпування нижньої третини обличчя"
+            alt={t.about.portraitAlt}
             fill
             sizes="(max-width: 1024px) 100vw, 48vw"
             className="object-cover object-center"
@@ -22,26 +17,20 @@ export function About() {
         </div>
 
         <div className="flex flex-col justify-center px-5 py-16 md:px-14 md:py-20 lg:pr-[var(--gutter-edge-lg)]">
-          <SectionLabel>Про мене</SectionLabel>
+          <SectionLabel>{t.about.label}</SectionLabel>
 
           <h2 className="mt-8 max-w-[20ch] text-[30px] leading-[1.15] sm:text-[38px] lg:text-[44px]">
-            Працюю з обличчям як з системою, а не набором зморшок
+            {t.about.title}
           </h2>
 
           <div className="mt-8 max-w-[52ch] space-y-4 text-[17px] leading-relaxed text-ink-muted">
-            <p>
-              Тейпування — це не про «наклеїти стрічку». Це робота з лімфотоком,
-              тонусом м&#39;язів і фасціями. Перед першим сеансом ми розбираємо
-              вашу історію: набряки, сон, навантаження, попередні процедури.
-            </p>
-            <p>
-              На основі цього я збираю індивідуальну схему й показую, як
-              підтримувати результат удома між візитами.
-            </p>
+            {t.about.paragraphs.map((text) => (
+              <p key={text}>{text}</p>
+            ))}
           </div>
 
           <dl className="mt-12 grid grid-cols-3 gap-4 border-t border-line pt-8 text-center sm:text-left">
-            {FACTS.map((fact) => (
+            {t.about.facts.map((fact) => (
               <div key={fact.label}>
                 <dt className="sr-only">{fact.label}</dt>
                 <dd>

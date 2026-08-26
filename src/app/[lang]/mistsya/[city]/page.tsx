@@ -12,7 +12,9 @@ import { listPublicServices } from "@/lib/db/public-services";
 import { listPublicSchedule } from "@/lib/db/working-days";
 import { CATEGORIES } from "@/lib/services";
 import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
-import { CATEGORY_SEO, cityBySlug, pageMetadata } from "@/lib/seo";
+import { categorySeo, cityBySlug, pageMetadata } from "@/lib/seo";
+import { cityLabel, getDictionary } from "@/lib/dictionary";
+import { LOCALES, isLocale, localePath, type Locale } from "@/lib/i18n";
 
 export const revalidate = 3600;
 
@@ -20,32 +22,45 @@ export const revalidate = 3600;
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return LOCATIONS.map((l) => ({ city: l.slug }));
+  return LOCALES.flatMap((lang) =>
+    LOCATIONS.map((l) => ({ lang, city: l.slug })),
+  );
 }
 
 export async function generateMetadata(
-  props: PageProps<"/mistsya/[city]">,
+  props: PageProps<"/[lang]/mistsya/[city]">,
 ): Promise<Metadata> {
-  const { city } = await props.params;
-  const place = cityBySlug(city);
+  const { lang, city } = await props.params;
+  const locale: Locale = isLocale(lang) ? lang : "uk";
+  const place = cityBySlug(city, locale);
   if (!place) return {};
 
   return pageMetadata({
+    locale,
     // Місто в заголовку — те, за чим шукають: «тейпування Львів».
-    title: `Тейпування ${place.locative}`,
+    title: getDictionary(locale).pages.city.metaTitle.replace(
+      "{locative}",
+      place.locative,
+    ),
     description: place.description,
     path: `/mistsya/${city}`,
     keywords: place.keywords,
   });
 }
 
-export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
-  const { city } = await props.params;
-  const place = cityBySlug(city);
+export default async function CityPage(
+  props: PageProps<"/[lang]/mistsya/[city]">,
+) {
+  const { lang, city } = await props.params;
+  if (!isLocale(lang)) notFound();
+  const t = getDictionary(lang);
+  const tc = t.pages.city;
+
+  const place = cityBySlug(city, lang);
   if (!place) notFound();
 
   const [services, schedule] = await Promise.all([
-    listPublicServices(),
+    listPublicServices(lang),
     listPublicSchedule(),
   ]);
   const present = CATEGORIES.filter((cat) =>
@@ -56,21 +71,24 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
 
   return (
     <>
-      <CityStructuredData slug={city} />
+      <CityStructuredData slug={city} locale={lang} />
 
-      <PageShell services={services} schedule={schedule}>
+      <PageShell services={services} schedule={schedule} t={t} locale={lang}>
         <PageHero
           eyebrow={place.city}
-          title={`Естетичне тейпування ${place.locative}`}
+          title={tc.heroTitle.replace("{locative}", place.locative)}
           lead={place.intro}
           trail={[
-            { name: "Головна", path: "/" },
-            { name: place.city, path: `/mistsya/${city}` },
+            { name: t.pages.home, path: localePath(lang, "/") },
+            {
+              name: place.city,
+              path: localePath(lang, `/mistsya/${city}`),
+            },
           ]}
           media={{
             src: "/images/about-portrait.jpg",
-            alt: "Майстриня наносить тейп у кабінеті студії",
-            caption: `${place.address} — за попереднім записом`,
+            alt: tc.mediaAlt,
+            caption: tc.mediaCaption.replace("{address}", place.address),
           }}
         >
           {/* Адреса й години — те, за чим приходять на локальну сторінку.
@@ -79,7 +97,7 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
           <dl className="mt-12 grid max-w-[38rem] gap-4 border-t border-line pt-8 sm:grid-cols-2">
             <div>
               <dt className="text-[13px] uppercase tracking-[0.18em] text-ink-muted">
-                Адреса
+                {tc.addressLabel}
               </dt>
               <dd className="mt-3 text-[17px] leading-relaxed">
                 {place.address}
@@ -87,16 +105,16 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
             </div>
             <div>
               <dt className="text-[13px] uppercase tracking-[0.18em] text-ink-muted">
-                Години
+                {tc.hoursLabel}
               </dt>
               <dd className="tnum mt-3 text-[17px] leading-relaxed">
-                Пн–Сб, 10:00–19:00
+                {tc.hours}
               </dd>
             </div>
           </dl>
 
           <div className="mt-10">
-            <BookNowButton size="lg">Записатись на сеанс</BookNowButton>
+            <BookNowButton size="lg">{t.booking.cta}</BookNowButton>
           </div>
         </PageHero>
 
@@ -107,9 +125,9 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
         <Reveal>
           <Card as="section" tone="canvas" className="py-20 md:py-24">
             <Container>
-              <SectionLabel>Кабінет</SectionLabel>
+              <SectionLabel>{tc.studioLabel}</SectionLabel>
               <h2 className="mt-6 max-w-[20ch] text-[30px] leading-[1.15] sm:text-[38px]">
-                Як нас знайти {place.locative}
+                {tc.findUs.replace("{locative}", place.locative)}
               </h2>
 
               <address className="mt-12 not-italic">
@@ -119,13 +137,13 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
                       Google читає як NAP (name-address-phone). Розірвати його
                       заради відсутності повтору означало б послабити локальну
                       видачу. */}
-                  <ContactTile label="Адреса">
+                  <ContactTile label={tc.addressLabel}>
                     {place.address}
                     <br />
                     {place.city}
                   </ContactTile>
 
-                  <ContactTile label="Телефон">
+                  <ContactTile label={tc.phoneLabel}>
                     <a
                       href={`tel:${CONTACTS.phone}`}
                       className="underline-offset-4 transition-colors hover:underline"
@@ -134,7 +152,7 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
                     </a>
                   </ContactTile>
 
-                  <ContactTile label="Пошта">
+                  <ContactTile label={tc.emailLabel}>
                     <a
                       href={`mailto:${CONTACTS.email}`}
                       className="break-words underline-offset-4 transition-colors hover:underline"
@@ -143,21 +161,22 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
                     </a>
                   </ContactTile>
 
-                  <ContactTile label="Години">
-                    Пн–Сб, 10:00–19:00
+                  <ContactTile label={tc.hoursLabel}>
+                    {tc.hours}
                     <span className="mt-1 block text-[14px] text-ink-muted">
-                      за попереднім записом
+                      {tc.byAppointment}
                     </span>
                   </ContactTile>
                 </ul>
               </address>
 
               <nav
-                aria-label="Соцмережі"
+                aria-label={t.nav.socials}
                 className="mt-10 flex flex-wrap items-center gap-2 border-t border-line pt-8"
               >
                 <span className="mr-2 text-[15px] text-ink-muted">
-                  <span aria-hidden="true">/ </span>Написати
+                  <span aria-hidden="true">/ </span>
+                  {tc.write}
                 </span>
                 {SOCIALS.map((s) => (
                   <a
@@ -179,15 +198,14 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
         <Reveal>
           <Card as="section" className="py-20 md:py-28">
             <Container>
-              <SectionLabel>Послуги</SectionLabel>
+              <SectionLabel>{t.nav.services}</SectionLabel>
 
               <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-end">
                 <h2 className="max-w-[20ch] text-[30px] leading-[1.15] sm:text-[40px] lg:text-[46px]">
-                  Що можна зробити {place.locative}
+                  {tc.whatWeDo.replace("{locative}", place.locative)}
                 </h2>
                 <p className="max-w-[48ch] text-[16px] leading-relaxed text-ink-muted lg:pb-2">
-                  Обидва кабінети працюють за однаковим прайсом і однаковим
-                  переліком послуг.
+                  {tc.samePrice}
                 </p>
               </div>
 
@@ -195,21 +213,21 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
                 {present.map((cat, i) => (
                   <li key={cat.id}>
                     <Link
-                      href={`/poslugy/${cat.id}`}
+                      href={localePath(lang, `/poslugy/${cat.id}`)}
                       className="group flex h-full flex-col rounded-[26px] bg-canvas p-6 transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-soft)] hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.3)] motion-reduce:transform-none md:p-8"
                     >
                       <span className="tnum text-[13px] text-ink-muted">
                         0{i + 1}
                       </span>
                       <h3 className="mt-4 text-[21px] leading-snug">
-                        {cat.label}
+                        {t.categories[cat.id].label}
                       </h3>
                       <p className="mt-2 text-[15px] leading-relaxed text-ink-muted">
-                        {CATEGORY_SEO[cat.id].description}
+                        {categorySeo(cat.id, lang).description}
                       </p>
 
                       <span className="mt-auto flex items-center justify-between gap-3 border-t border-line pt-5 text-[14px] text-ink-muted">
-                        Ціни та опис
+                        {tc.pricesLink}
                         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-ink transition-[transform,background-color,color] duration-200 group-hover:translate-x-0.5 group-hover:bg-ink group-hover:text-white">
                           <svg
                             viewBox="0 0 24 24"
@@ -239,26 +257,25 @@ export default async function CityPage(props: PageProps<"/mistsya/[city]">) {
               <Container>
                 <div className="grid gap-10 lg:grid-cols-[1fr_0.75fr] lg:items-center">
                   <div>
-                    <SectionLabel>Другий кабінет</SectionLabel>
+                    <SectionLabel>{tc.otherStudio}</SectionLabel>
                     <h2 className="mt-6 max-w-[18ch] text-[30px] leading-[1.15] sm:text-[38px]">
-                      Зручніше в іншому місті?
+                      {tc.otherTitle}
                     </h2>
                     <p className="mt-6 max-w-[46ch] text-[16px] leading-relaxed text-ink-muted">
-                      Приймаю там за тим самим прайсом і за тим самим підходом —
-                      схема під запит, а не за шаблоном.
+                      {tc.otherText}
                     </p>
                   </div>
 
                   <Link
-                    href={`/mistsya/${other.slug}`}
+                    href={localePath(lang, `/mistsya/${other.slug}`)}
                     className="group flex items-center justify-between gap-6 rounded-[26px] bg-surface p-8 transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-soft)] hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.3)] motion-reduce:transform-none"
                   >
                     <span>
                       <span className="block text-[26px] leading-tight sm:text-[32px]">
-                        {other.city}
+                        {cityLabel(t, other.slug).city || other.city}
                       </span>
                       <span className="mt-3 block text-[15px] text-ink-muted">
-                        {other.address}
+                        {cityLabel(t, other.slug).address || other.address}
                       </span>
                     </span>
                     <span className="grid size-12 shrink-0 place-items-center rounded-full bg-canvas text-ink transition-[transform,background-color,color] duration-200 group-hover:translate-x-0.5 group-hover:bg-ink group-hover:text-white">

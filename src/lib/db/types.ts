@@ -14,6 +14,12 @@ export type ServiceRow = {
   slug: string;
   title: string;
   summary: string;
+  /**
+   * Англійський переклад — міграція 0016. `null` означає «ще не написали»:
+   * вітрина в такому разі показує український текст, а не порожнє поле.
+   */
+  title_en: string | null;
+  summary_en: string | null;
   price: number;
   price_from: boolean;
   wear: string | null;
@@ -187,6 +193,12 @@ export type KitRow = {
   slug: string;
   title: string;
   summary: string;
+  /**
+   * Англійський переклад — міграція 0016. `null` означає «ще не написали»:
+   * вітрина в такому разі показує український текст, а не порожнє поле.
+   */
+  title_en: string | null;
+  summary_en: string | null;
   price: number;
   price_from: boolean;
   zone: KitZone;

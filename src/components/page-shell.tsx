@@ -6,6 +6,8 @@ import { MobileCta } from "./mobile-cta";
 import { Card } from "./ui";
 import type { Service } from "@/lib/services";
 import type { WorkingDay } from "@/lib/schedule";
+import type { Dictionary } from "@/lib/dictionary";
+import type { Locale } from "@/lib/i18n";
 
 /**
  * Каркас внутрішньої сторінки.
@@ -26,27 +28,31 @@ export function PageShell({
   children,
   services,
   schedule,
+  t,
+  locale,
 }: {
   children: ReactNode;
   services: Service[];
+  t: Dictionary;
+  locale: Locale;
   /** Графік для анкети — так само, як прайс: потрібен на кожній сторінці. */
   schedule?: Record<string, WorkingDay[]>;
 }) {
   return (
-    <BookingModalProvider services={services} schedule={schedule}>
+    <BookingModalProvider services={services} schedule={schedule} t={t}>
       {/* Шапка на своєму тлі, без лінії знизу: герой під нею білий, і межа
           між ними була б рискою впоперек порожнього місця. */}
       <Card as="div">
-        <SiteHeader />
+        <SiteHeader t={t} locale={locale} />
       </Card>
 
       <main id="main" className="pb-24 md:pb-0">
         {children}
 
-        <SiteFooter />
+        <SiteFooter t={t} locale={locale} />
       </main>
 
-      <MobileCta />
+      <MobileCta t={t} />
     </BookingModalProvider>
   );
 }

@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  CATEGORY_SEO,
-  CITY_SEO,
   SITE_DESCRIPTION,
+  categorySeo,
   cityBySlug,
   pageMetadata,
 } from "./seo.ts";
 import { CATEGORIES } from "./services.ts";
 import { LOCATIONS } from "./contacts.ts";
+import { LOCALES } from "./i18n.ts";
 
 /**
  * Тексти в цьому файлі пишуться руками, а межі видачі на око не видно: опис на
@@ -31,10 +31,11 @@ test("опис сайту вкладається в межі сніпета", ()
   );
 });
 
-test("кожна категорія має тексти, і вони вкладаються в межі", () => {
+test("кожна категорія має тексти обома мовами, і вони вкладаються в межі", () => {
+  for (const locale of LOCALES) {
   for (const cat of CATEGORIES) {
-    const seo = CATEGORY_SEO[cat.id];
-    assert.ok(seo, `немає текстів для категорії ${cat.id}`);
+    const seo = categorySeo(cat.id, locale);
+    assert.ok(seo, `немає текстів для категорії ${cat.id} (${locale})`);
 
     // `template` у layout додає « · Kotova Taping» — 16 символів, які теж
     // потрапляють у видачу, тож заголовок міряємо разом із суфіксом.
@@ -57,32 +58,62 @@ test("кожна категорія має тексти, і вони вклад�
     assert.ok(seo.keywords.length > 0, `${cat.id}: порожні ключові слова`);
     assert.ok(seo.intro.length > 0, `${cat.id}: порожній вступ`);
   }
+  }
 });
 
 test("описи категорій не повторюються", () => {
   // Однаковий опис на двох сторінках — це дублі в очах пошуковика: він лишить
   // у видачі одну з них, і саме ту, яку обере сам.
-  const seen = new Map<string, string>();
-  for (const cat of CATEGORIES) {
-    const { description } = CATEGORY_SEO[cat.id];
-    const previous = seen.get(description);
-    assert.ok(
-      previous === undefined,
-      `${cat.id} і ${previous} мають однаковий опис`,
-    );
-    seen.set(description, cat.id);
+  for (const locale of LOCALES) {
+    const seen = new Map<string, string>();
+    for (const cat of CATEGORIES) {
+      const { description } = categorySeo(cat.id, locale);
+      const previous = seen.get(description);
+      assert.ok(
+        previous === undefined,
+        `${cat.id} і ${previous} мають однаковий опис (${locale})`,
+      );
+      seen.set(description, cat.id);
+    }
   }
 });
 
-test("кожен кабінет має тексти сторінки міста", () => {
-  for (const location of LOCATIONS) {
-    const seo = CITY_SEO[location.slug];
-    assert.ok(seo, `немає текстів для кабінету ${location.slug}`);
-    assert.ok(
-      seo.description.length <= DESCRIPTION_MAX,
-      `${location.slug}: опис ${seo.description.length} символів`,
-    );
+test("кожен кабінет має тексти сторінки міста обома мовами", () => {
+  for (const locale of LOCALES) {
+    for (const location of LOCATIONS) {
+      const seo = cityBySlug(location.slug, locale);
+      assert.ok(seo, `немає текстів для кабінету ${location.slug} (${locale})`);
+      assert.ok(
+        seo.description.length <= DESCRIPTION_MAX,
+        `${location.slug} (${locale}): опис ${seo.description.length} символів`,
+      );
+    }
   }
+});
+
+test("англійська сторінка міста показує англійську назву й адресу", () => {
+  const lviv = cityBySlug("lviv", "en");
+  assert.equal(lviv?.city, "Lviv");
+  assert.equal(lviv?.address, "204b Zelena St.");
+  assert.equal(lviv?.locative, "in Lviv");
+});
+
+test("hreflang перелічує обидві мови та x-default", () => {
+  const meta = pageMetadata({
+    locale: "en",
+    title: "Neurological taping",
+    description: "A page description long enough to look like a real one.",
+    path: "/poslugy/neuro",
+  });
+
+  // Англійська сторінка вказує сама на себе, українська — на шлях без
+  // префікса. Без цього Google вважає їх дублями й лишає у видачі одну.
+  assert.equal(meta.alternates?.canonical, "/en/poslugy/neuro");
+  assert.deepEqual(meta.alternates?.languages, {
+    uk: "/poslugy/neuro",
+    en: "/en/poslugy/neuro",
+    "x-default": "/poslugy/neuro",
+  });
 });
 
 test("cityBySlug зводить адресу з текстами, а на чужому слагу мовчить", () => {

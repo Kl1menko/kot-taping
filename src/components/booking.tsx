@@ -2,6 +2,7 @@
 
 import { BookNowButton } from "./book-now-button";
 import { Card, Container, SectionLabel } from "./ui";
+import type { Dictionary } from "@/lib/dictionary";
 
 /**
  * Секція запису: обіцянка й кнопка, а не сама анкета.
@@ -14,23 +15,22 @@ import { Card, Container, SectionLabel } from "./ui";
  * Пошта, графік і соцмережі звідси прибрані: вони дублювали підвал і
  * розтягували секцію на дві колонки, відтягуючи увагу від самої кнопки.
  */
-export function Booking() {
+export function Booking({ t }: { t: Dictionary }) {
   return (
     <Card as="section" id="booking" tone="blush">
       <Container className="py-16 md:py-24">
-        <SectionLabel>Запис</SectionLabel>
+        <SectionLabel>{t.booking.label}</SectionLabel>
 
         <div className="mt-8">
           <h2 className="max-w-[18ch] text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]">
-            Залиште заявку — підберемо зручний час
+            {t.booking.title}
           </h2>
           <p className="mt-6 max-w-[42ch] text-[16px] leading-relaxed text-ink-muted">
-            Це не миттєве бронювання: я переглядаю кожну заявку особисто й
-            телефоную, щоб підтвердити дату та відповісти на запитання.
+            {t.booking.text}
           </p>
 
           <div className="mt-10">
-            <BookNowButton size="lg">Записатись на сеанс</BookNowButton>
+            <BookNowButton size="lg">{t.booking.cta}</BookNowButton>
           </div>
         </div>
       </Container>

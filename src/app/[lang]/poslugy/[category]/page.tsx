@@ -12,8 +12,16 @@ import { listPublicServices } from "@/lib/db/public-services";
 import { listPublicSchedule } from "@/lib/db/working-days";
 import { CATEGORIES, type ServiceCategory } from "@/lib/services";
 import { LOCATIONS } from "@/lib/contacts";
-import { plural } from "@/lib/agenda";
-import { CATEGORY_SEO, categoryLabel, pageMetadata } from "@/lib/seo";
+import { categorySeo, categoryLabel, pageMetadata } from "@/lib/seo";
+import { cityLabel, getDictionary } from "@/lib/dictionary";
+import {
+  LOCALES,
+  formatNumber,
+  isLocale,
+  localePath,
+  pluralForm,
+  type Locale,
+} from "@/lib/i18n";
 
 export const revalidate = 3600;
 
@@ -28,21 +36,27 @@ export const revalidate = 3600;
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return CATEGORIES.map((c) => ({ category: c.id }));
+  // Обидві мови × шість категорій: усі дванадцять сторінок прередеряться.
+  return LOCALES.flatMap((lang) =>
+    CATEGORIES.map((c) => ({ lang, category: c.id })),
+  );
 }
 
-function seoFor(category: string) {
-  return CATEGORY_SEO[category as ServiceCategory] ?? null;
+function seoFor(category: string, locale: Locale) {
+  const known = CATEGORIES.some((c) => c.id === category);
+  return known ? categorySeo(category as ServiceCategory, locale) : null;
 }
 
 export async function generateMetadata(
-  props: PageProps<"/poslugy/[category]">,
+  props: PageProps<"/[lang]/poslugy/[category]">,
 ): Promise<Metadata> {
-  const { category } = await props.params;
-  const seo = seoFor(category);
+  const { lang, category } = await props.params;
+  const locale: Locale = isLocale(lang) ? lang : "uk";
+  const seo = seoFor(category, locale);
   if (!seo) return {};
 
   return pageMetadata({
+    locale,
     title: seo.heading,
     description: seo.description,
     path: `/poslugy/${category}`,
@@ -51,14 +65,18 @@ export async function generateMetadata(
 }
 
 export default async function CategoryPage(
-  props: PageProps<"/poslugy/[category]">,
+  props: PageProps<"/[lang]/poslugy/[category]">,
 ) {
-  const { category } = await props.params;
-  const seo = seoFor(category);
+  const { lang, category } = await props.params;
+  if (!isLocale(lang)) notFound();
+  const t = getDictionary(lang);
+  const tc = t.pages.category;
+
+  const seo = seoFor(category, lang);
   if (!seo) notFound();
 
   const [all, schedule] = await Promise.all([
-    listPublicServices(),
+    listPublicServices(lang),
     listPublicSchedule(),
   ]);
   const services = all.filter((s) => s.category === category);
@@ -67,7 +85,7 @@ export default async function CategoryPage(
   // порожнечею гірше, ніж чесна 404.
   if (services.length === 0) notFound();
 
-  const label = categoryLabel(category as ServiceCategory);
+  const label = categoryLabel(category as ServiceCategory, lang);
 
   // Нижня межа прайсу групи й діапазон носіння — два числа, за якими людина
   // вирішує, чи читати список цілком.
@@ -86,56 +104,66 @@ export default async function CategoryPage(
       <CategoryStructuredData
         category={category as ServiceCategory}
         services={services}
+        locale={lang}
       />
 
-      <PageShell services={all} schedule={schedule}>
+      <PageShell services={all} schedule={schedule} t={t} locale={lang}>
         <PageHero
           eyebrow={label}
           title={seo.heading}
           lead={seo.intro}
           trail={[
-            { name: "Головна", path: "/" },
-            { name: "Послуги", path: "/poslugy" },
-            { name: label, path: `/poslugy/${category}` },
+            { name: t.pages.home, path: localePath(lang, "/") },
+            { name: t.nav.services, path: localePath(lang, "/poslugy") },
+            {
+              name: label,
+              path: localePath(lang, `/poslugy/${category}`),
+            },
           ]}
           media={{
             src: `/images/services/${category}.jpg`,
-            alt: `${label} — аплікація тейпів`,
-            caption: LOCATIONS.map((l) => l.city).join(" · "),
+            alt: tc.mediaAlt.replace("{category}", label),
+            caption: LOCATIONS.map(
+              (l) => cityLabel(t, l.slug).city || l.city,
+            ).join(" · "),
           }}
         >
           <dl className="tnum mt-12 grid max-w-[38rem] grid-cols-2 gap-4 border-t border-line pt-8 sm:grid-cols-3">
             <div>
-              <dt className="sr-only">Позицій у групі</dt>
+              <dt className="sr-only">{tc.countLabel}</dt>
               <dd>
                 <span className="block text-[28px] leading-none sm:text-[34px]">
                   {services.length}
                 </span>
                 <span className="mt-2 block text-[14px] text-ink-muted">
-                  {plural(services.length, "послуга", "послуги", "послуг")}
+                  {pluralForm(
+                    lang,
+                    services.length,
+                    t.pages.services.serviceForms,
+                  )}
                 </span>
               </dd>
             </div>
             <div>
-              <dt className="sr-only">Ціни від</dt>
+              <dt className="sr-only">{t.pages.services.priceLabel}</dt>
               <dd>
                 <span className="block text-[28px] leading-none sm:text-[34px]">
-                  {floor.toLocaleString("uk-UA")} ₴
+                  {formatNumber(lang, floor)} ₴
                 </span>
                 <span className="mt-2 block text-[14px] text-ink-muted">
-                  нижня межа
+                  {t.pages.services.priceFloor}
                 </span>
               </dd>
             </div>
             {wear && (
               <div>
-                <dt className="sr-only">Тейп тримається</dt>
+                <dt className="sr-only">{tc.wearLabel}</dt>
                 <dd>
                   <span className="block text-[28px] leading-none sm:text-[34px]">
                     {wear}
                   </span>
                   <span className="mt-2 block text-[14px] text-ink-muted">
-                    носіння тейпу
+                    {tc.wearCaption}
                   </span>
                 </dd>
               </div>
@@ -143,28 +171,26 @@ export default async function CategoryPage(
           </dl>
 
           <div className="mt-10">
-            <BookNowButton size="lg">Записатись на сеанс</BookNowButton>
+            <BookNowButton size="lg">{t.booking.cta}</BookNowButton>
           </div>
         </PageHero>
 
         <Reveal>
           <Card as="section" tone="canvas" className="py-20 md:py-28">
             <Container>
-              <SectionLabel>Прайс</SectionLabel>
+              <SectionLabel>{tc.priceLabel}</SectionLabel>
 
               <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-end">
                 <h2 className="max-w-[18ch] text-[30px] leading-[1.15] sm:text-[40px] lg:text-[46px]">
-                  {label}: ціни
+                  {tc.priceTitle.replace("{category}", label)}
                 </h2>
                 <p className="max-w-[52ch] text-[16px] leading-relaxed text-ink-muted lg:pb-2">
-                  Ціна залежить від зони та обсягу роботи. «Від» означає, що
-                  остаточну суму визначаємо на місці після огляду — без
-                  сюрпризів уже після процедури.
+                  {tc.priceNote}
                 </p>
               </div>
 
               <div className="mt-14">
-                <ServiceList services={services} />
+                <ServiceList services={services} t={t} />
               </div>
             </Container>
           </Card>
@@ -174,24 +200,25 @@ export default async function CategoryPage(
         <Reveal>
           <Card as="section" tone="blush" className="py-20 md:py-24">
             <Container>
-              <SectionLabel>Кабінети</SectionLabel>
+              <SectionLabel>{t.pages.services.officesLabel}</SectionLabel>
               <h2 className="mt-6 max-w-[20ch] text-[30px] leading-[1.15] sm:text-[38px]">
-                Де записатись
+                {tc.whereTitle}
               </h2>
 
               <ul className="mt-10 grid gap-4 sm:grid-cols-2">
                 {LOCATIONS.map((location) => (
                   <li key={location.slug}>
                     <Link
-                      href={`/mistsya/${location.slug}`}
+                      href={localePath(lang, `/mistsya/${location.slug}`)}
                       className="group flex h-full items-center justify-between gap-6 rounded-[22px] bg-surface p-6 transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-soft)] hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.3)] motion-reduce:transform-none md:p-8"
                     >
                       <span>
                         <span className="block text-[22px]">
-                          {location.city}
+                          {cityLabel(t, location.slug).city || location.city}
                         </span>
                         <span className="mt-2 block text-[15px] text-ink-muted">
-                          {location.address}
+                          {cityLabel(t, location.slug).address ||
+                            location.address}
                         </span>
                       </span>
                       <span className="grid size-11 shrink-0 place-items-center rounded-full bg-canvas text-ink transition-[transform,background-color,color] duration-200 group-hover:translate-x-0.5 group-hover:bg-ink group-hover:text-white">
@@ -220,19 +247,19 @@ export default async function CategoryPage(
           <Reveal>
             <Card as="section" className="py-20 md:py-24">
               <Container>
-                <SectionLabel>Інші напрями</SectionLabel>
+                <SectionLabel>{tc.othersLabel}</SectionLabel>
                 <h2 className="mt-6 max-w-[22ch] text-[30px] leading-[1.15] sm:text-[38px]">
-                  З чим ще працюю
+                  {tc.othersTitle}
                 </h2>
 
                 <ul className="mt-10 flex flex-wrap gap-3">
                   {others.map((c) => (
                     <li key={c.id}>
                       <Link
-                        href={`/poslugy/${c.id}`}
+                        href={localePath(lang, `/poslugy/${c.id}`)}
                         className="group inline-flex min-h-[52px] items-center gap-3 rounded-full bg-canvas pl-6 pr-2 text-[15px] transition-colors duration-200 hover:bg-ink hover:text-white"
                       >
-                        {c.label}
+                        {t.categories[c.id].label}
                         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-ink transition-transform duration-200 group-hover:translate-x-0.5">
                           <svg
                             viewBox="0 0 24 24"

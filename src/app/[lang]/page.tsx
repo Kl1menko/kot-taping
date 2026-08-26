@@ -16,6 +16,11 @@ import { BookingModalProvider } from "@/components/booking-modal";
 import { listPublicServices } from "@/lib/db/public-services";
 import { listPublicSchedule } from "@/lib/db/working-days";
 import { listPublicKits } from "@/lib/db/public-kits";
+import { getDictionary } from "@/lib/dictionary";
+import { pageMetadata } from "@/lib/seo";
+import { isLocale, type Locale } from "@/lib/i18n";
+import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
 /**
  * Сторінка статична, але з терміном придатності.
@@ -27,50 +32,75 @@ import { listPublicKits } from "@/lib/db/public-kits";
  */
 export const revalidate = 3600;
 
-export default async function Home() {
+/**
+ * Метадані головної для кожної мови.
+ *
+ * Заголовок і опис приходять зі словника: англійська версія з українським
+ * описом у видачі виглядала б помилкою, а не двомовністю.
+ */
+export async function generateMetadata({
+  params,
+}: PageProps<"/[lang]">): Promise<Metadata> {
+  const { lang } = await params;
+  const locale: Locale = isLocale(lang) ? lang : "uk";
+  const t = getDictionary(locale);
+
+  return pageMetadata({
+    locale,
+    title: t.meta.home.title,
+    description: t.meta.home.description,
+    path: "/",
+  });
+}
+
+export default async function Home({ params }: PageProps<"/[lang]">) {
+  const { lang } = await params;
+  if (!isLocale(lang)) notFound();
+  const t = getDictionary(lang);
+
   // Один запит на сторінку: прайс потрібен і карткам, і формі запису, і
   // schema.org — читаємо його тут і передаємо вниз, щоб не ходити в базу тричі.
   const [services, kits, schedule] = await Promise.all([
-    listPublicServices(),
-    listPublicKits(),
+    listPublicServices(lang),
+    listPublicKits(lang),
     listPublicSchedule(),
   ]);
 
   return (
-    <BookingModalProvider services={services} schedule={schedule}>
-      <StructuredData services={services} />
+    <BookingModalProvider services={services} schedule={schedule} t={t}>
+      <StructuredData services={services} locale={lang} />
       <main id="main" className="pb-24 md:pb-0">
-        <Hero />
+        <Hero t={t} locale={lang} />
         <Reveal>
-          <Services services={services} />
+          <Services services={services} t={t} locale={lang} />
         </Reveal>
         <Reveal>
-          <Pitch />
+          <Pitch t={t} />
         </Reveal>
         <Reveal>
-          <Kits kits={kits} />
+          <Kits kits={kits} t={t} />
         </Reveal>
         <Reveal>
-          <About />
+          <About t={t} />
         </Reveal>
         <Reveal>
-          <Results />
+          <Results t={t} />
         </Reveal>
         <Reveal>
-          <Testimonials />
+          <Testimonials t={t} />
         </Reveal>
         <Reveal>
-          <Gallery />
+          <Gallery t={t} />
         </Reveal>
         <Reveal>
-          <Faq />
+          <Faq t={t} />
         </Reveal>
         <Reveal>
-          <Booking />
+          <Booking t={t} />
         </Reveal>
-        <SiteFooter />
+        <SiteFooter t={t} locale={lang} />
       </main>
-      <MobileCta />
+      <MobileCta t={t} />
     </BookingModalProvider>
   );
 }

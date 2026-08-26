@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useBookingModal } from "./booking-modal";
+import type { Dictionary } from "@/lib/dictionary";
 
 /**
  * Sticky booking bar for small screens. Appears once the user scrolls past the
  * hero and hides again while the booking form itself is on screen.
  */
-export function MobileCta() {
+export function MobileCta({ t }: { t: Dictionary }) {
   const [visible, setVisible] = useState(false);
   const { open } = useBookingModal();
 
@@ -44,7 +45,7 @@ export function MobileCta() {
         tabIndex={visible ? undefined : -1}
         className="flex w-full min-h-[56px] cursor-pointer items-center justify-between gap-4 rounded-full bg-ink py-2 pl-7 pr-2 text-[15px] text-white shadow-[0_12px_32px_-12px_rgba(0,0,0,0.5)]"
       >
-        Записатись на сеанс
+        {t.booking.cta}
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-ink">
           <svg
             viewBox="0 0 24 24"

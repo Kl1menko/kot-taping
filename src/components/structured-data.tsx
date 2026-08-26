@@ -1,8 +1,18 @@
 import type { Service } from "@/lib/services";
 import { CONTACTS, LOCATIONS, SOCIALS } from "@/lib/contacts";
-import { FAQ_ITEMS } from "@/lib/content";
 import { SITE_URL } from "@/lib/site";
-import { CATEGORY_SEO, CITY_SEO, SITE_NAME, categoryLabel } from "@/lib/seo";
+import { getDictionary } from "@/lib/dictionary";
+import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n";
+
+/**
+ * Мова розмітки у форматі BCP 47.
+ *
+ * Розмітка описує конкретну версію сторінки, тож англійська сторінка з
+ * `uk-UA` у JSON-LD суперечила б власному `<html lang>` — а суперечливі
+ * сигнали Google просто ігнорує.
+ */
+const JSONLD_LANG: Record<Locale, string> = { uk: "uk-UA", en: "en-US" };
+import { categorySeo, cityBySlug, SITE_NAME, categoryLabel } from "@/lib/seo";
 import type { ServiceCategory } from "@/lib/services";
 
 /**
@@ -103,13 +113,13 @@ function businessNode() {
 }
 
 /** Сайт як сутність — зв'язує сторінки з бізнесом і дає назву в видачі. */
-function websiteNode() {
+function websiteNode(locale: Locale) {
   return {
     "@type": "WebSite",
     "@id": WEBSITE_ID,
     url: SITE_URL,
     name: SITE_NAME,
-    inLanguage: "uk-UA",
+    inLanguage: JSONLD_LANG[locale],
     publisher: { "@id": BUSINESS_ID },
   };
 }
@@ -148,24 +158,34 @@ function serviceNode(service: Service, url: string) {
   };
 }
 
-/** Хлібні крихти — Google показує їх замість голого URL у сніпеті. */
-function breadcrumbNode(trail: { name: string; path: string }[]) {
+/**
+ * Хлібні крихти — Google показує їх замість голого URL у сніпеті.
+ *
+ * Шляхи приходять без мовного префікса, а додає його ця функція: інакше
+ * крихти англійської сторінки вели б на українські адреси, і Google бачив би
+ * ланцюжок, що виходить за межі мовної версії.
+ */
+function breadcrumbNode(
+  trail: { name: string; path: string }[],
+  locale: Locale,
+) {
   return {
     "@type": "BreadcrumbList",
     itemListElement: trail.map((item, i) => ({
       "@type": "ListItem",
       position: i + 1,
       name: item.name,
-      item: `${SITE_URL}${item.path}`,
+      item: `${SITE_URL}${localePath(locale, item.path)}`,
     })),
   };
 }
 
-function faqNode() {
+function faqNode(locale: Locale) {
   return {
     "@type": "FAQPage",
-    "@id": `${SITE_URL}/#faq`,
-    mainEntity: FAQ_ITEMS.map((item) => ({
+    "@id": `${SITE_URL}${localePath(locale, "/")}#faq`,
+    inLanguage: JSONLD_LANG[locale],
+    mainEntity: getDictionary(locale).faq.items.map((item) => ({
       "@type": "Question",
       name: item.q,
       acceptedAnswer: { "@type": "Answer", text: item.a },
@@ -176,11 +196,18 @@ function faqNode() {
 // — Розмітка сторінок —
 
 /** Головна: бізнес, сайт, каталог послуг і FAQ. */
-export function StructuredData({ services }: { services: Service[] }) {
+export function StructuredData({
+  services,
+  locale = DEFAULT_LOCALE,
+}: {
+  services: Service[];
+  locale?: Locale;
+}) {
+  const t = getDictionary(locale);
   const catalog = {
     "@type": "OfferCatalog",
-    "@id": `${SITE_URL}/#catalog`,
-    name: "Послуги тейпування",
+    "@id": `${SITE_URL}${localePath(locale, "/")}#catalog`,
+    name: t.services.label,
     itemListElement: services.map((service) => ({
       "@type": "Offer",
       itemOffered: { "@type": "Service", name: service.title },
@@ -201,9 +228,9 @@ export function StructuredData({ services }: { services: Service[] }) {
     <JsonLd
       graph={[
         businessNode(),
-        websiteNode(),
+        websiteNode(locale),
         { ...catalog, provider: { "@id": BUSINESS_ID } },
-        faqNode(),
+        faqNode(locale),
       ]}
     />
   );
@@ -213,33 +240,35 @@ export function StructuredData({ services }: { services: Service[] }) {
 export function CategoryStructuredData({
   category,
   services,
+  locale = DEFAULT_LOCALE,
 }: {
   category: ServiceCategory;
   services: Service[];
+  locale?: Locale;
 }) {
   const path = `/poslugy/${category}`;
-  const url = `${SITE_URL}${path}`;
-  const seo = CATEGORY_SEO[category];
+  const url = `${SITE_URL}${localePath(locale, path)}`;
+  const seo = categorySeo(category, locale);
 
   return (
     <JsonLd
       graph={[
-        websiteNode(),
+        websiteNode(locale),
         {
           "@type": "CollectionPage",
           "@id": `${url}#page`,
           url,
           name: seo.heading,
           description: seo.description,
-          inLanguage: "uk-UA",
+          inLanguage: JSONLD_LANG[locale],
           isPartOf: { "@id": WEBSITE_ID },
           about: { "@id": BUSINESS_ID },
         },
         breadcrumbNode([
-          { name: "Головна", path: "/" },
-          { name: "Послуги", path: "/poslugy" },
-          { name: categoryLabel(category), path },
-        ]),
+          { name: getDictionary(locale).pages.home, path: "/" },
+          { name: getDictionary(locale).nav.services, path: "/poslugy" },
+          { name: categoryLabel(category, locale), path },
+        ], locale),
         // Порядок у списку — той самий, що на сторінці: Google звіряє розмітку
         // з видимим текстом і не любить розбіжностей.
         {
@@ -258,27 +287,33 @@ export function CategoryStructuredData({
 }
 
 /** Каталог послуг: перелік категорій. */
-export function CatalogStructuredData({ counts }: { counts: Record<string, number> }) {
+export function CatalogStructuredData({
+  counts,
+  locale = DEFAULT_LOCALE,
+}: {
+  counts: Record<string, number>;
+  locale?: Locale;
+}) {
   const path = "/poslugy";
-  const url = `${SITE_URL}${path}`;
+  const url = `${SITE_URL}${localePath(locale, path)}`;
 
   return (
     <JsonLd
       graph={[
-        websiteNode(),
+        websiteNode(locale),
         {
           "@type": "CollectionPage",
           "@id": `${url}#page`,
           url,
           name: "Послуги та ціни",
-          inLanguage: "uk-UA",
+          inLanguage: JSONLD_LANG[locale],
           isPartOf: { "@id": WEBSITE_ID },
           about: { "@id": BUSINESS_ID },
         },
         breadcrumbNode([
-          { name: "Головна", path: "/" },
-          { name: "Послуги", path },
-        ]),
+          { name: getDictionary(locale).pages.home, path: "/" },
+          { name: getDictionary(locale).nav.services, path },
+        ], locale),
         {
           "@type": "ItemList",
           "@id": `${url}#list`,
@@ -302,24 +337,31 @@ export function CatalogStructuredData({ counts }: { counts: Record<string, numbe
  * відповідає на «де у Львові», і саме кабінет має потрапити в локальну видачу.
  * Через `@id` він той самий вузол, що й у графі головної, — не дубль.
  */
-export function CityStructuredData({ slug }: { slug: string }) {
-  const location = LOCATIONS.find((l) => l.slug === slug);
-  const seo = CITY_SEO[slug];
-  if (!location || !seo) return null;
+export function CityStructuredData({
+  slug,
+  locale = DEFAULT_LOCALE,
+}: {
+  slug: string;
+  locale?: Locale;
+}) {
+  // `cityBySlug` уже зводить адресу з текстами й віддає назву міста потрібною
+  // мовою — окремий пошук по LOCATIONS тут лише дублював би цю логіку.
+  const place = cityBySlug(slug, locale);
+  if (!place) return null;
 
   const path = `/mistsya/${slug}`;
-  const url = `${SITE_URL}${path}`;
+  const url = `${SITE_URL}${localePath(locale, path)}`;
 
   return (
     <JsonLd
       graph={[
-        websiteNode(),
+        websiteNode(locale),
         {
           "@type": "HealthAndBeautyBusiness",
           "@id": departmentId(slug),
-          name: `${SITE_NAME} — ${location.city}`,
+          name: `${SITE_NAME} — ${place.city}`,
           url,
-          description: seo.description,
+          description: place.description,
           email: CONTACTS.email,
           telephone: CONTACTS.phone,
           image: `${SITE_URL}/opengraph-image`,
@@ -327,14 +369,14 @@ export function CityStructuredData({ slug }: { slug: string }) {
           priceRange: "₴₴",
           currenciesAccepted: "UAH",
           openingHoursSpecification: OPENING_HOURS,
-          address: address(location),
-          areaServed: { "@type": "City", name: location.city },
+          address: address(place),
+          areaServed: { "@type": "City", name: place.city },
           parentOrganization: { "@id": BUSINESS_ID },
         },
         breadcrumbNode([
-          { name: "Головна", path: "/" },
-          { name: location.city, path },
-        ]),
+          { name: getDictionary(locale).pages.home, path: "/" },
+          { name: place.city, path },
+        ], locale),
       ]}
     />
   );

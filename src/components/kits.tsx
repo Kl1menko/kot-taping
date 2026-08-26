@@ -8,6 +8,7 @@ import { SOCIALS } from "@/lib/contacts";
 import { KitForm } from "./kit-form";
 import { formatKitPrice, type Kit } from "@/lib/kits";
 import { Sheet } from "./kit-sheet";
+import type { Dictionary } from "@/lib/dictionary";
 
 /** Фони плиток по колу — та сама палітра, що й у картках послуг. */
 const TILE_TONES = ["bg-blush", "bg-sand", "bg-clay"];
@@ -56,7 +57,7 @@ function ScrollButton({
  * мене», і на однаковому тлі стик між ними зникав би — два екрани зливалися в
  * одну суцільну площину.
  */
-export function Kits({ kits }: { kits: Kit[] }) {
+export function Kits({ kits, t }: { kits: Kit[]; t: Dictionary }) {
   const [openKit, setOpenKit] = useState<string | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -176,8 +177,8 @@ export function Kits({ kits }: { kits: Kit[] }) {
             тільки з'їдали б місце. `aria-hidden` — бо сама стрічка вже
             доступна з клавіатури прокруткою. */}
         <div aria-hidden="true" className="mt-5 hidden justify-end gap-2 lg:flex">
-          <ScrollButton onClick={() => scrollBy(-1)} label="Назад" back />
-          <ScrollButton onClick={() => scrollBy(1)} label="Далі" />
+          <ScrollButton onClick={() => scrollBy(-1)} label={t.kits.prev} back />
+          <ScrollButton onClick={() => scrollBy(1)} label={t.kits.next} />
         </div>
 
         <div className="mt-10 flex flex-col gap-5 border-t border-line pt-8 sm:flex-row sm:items-center sm:justify-between">
@@ -194,7 +195,7 @@ export function Kits({ kits }: { kits: Kit[] }) {
             <span className="text-[15px] text-ink-muted">
               або напишіть напряму
             </span>
-            <nav aria-label="Соцмережі" className="flex gap-2">
+            <nav aria-label={t.nav.socials} className="flex gap-2">
               {SOCIALS.filter((s) => s.id !== "facebook").map((s) => (
                 <a
                   key={s.id}
@@ -215,7 +216,7 @@ export function Kits({ kits }: { kits: Kit[] }) {
       <Sheet
         open={openKit !== null}
         onClose={() => setOpenKit(null)}
-        title="Замовлення набору"
+        title={t.kits.orderTitle}
       >
         {openKit && (
           <KitForm

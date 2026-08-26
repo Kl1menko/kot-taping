@@ -1,6 +1,9 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { db } from "@/lib/db/client";
+import { getDictionary } from "@/lib/dictionary";
+import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from "@/lib/i18n";
 import { escapeHtml, sendTelegram } from "@/lib/notify";
 import { sendPush } from "@/lib/push";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
@@ -101,10 +104,24 @@ async function tooManyFrom(phone: string): Promise<boolean> {
   return (count ?? 0) >= MAX_PER_HOUR;
 }
 
+/**
+ * Мова відвідувача для повідомлень форми.
+ *
+ * Серверні дії не бачать кореневого параметра `[lang]` — `next/root-params`
+ * там не працює. Тому спираємось на cookie, яку виставляє `proxy.ts` на
+ * кожній відкритій сторінці: людина, що заповнює англійську форму, вже має її
+ * зі значенням `en`.
+ */
+async function actionLocale() {
+  const value = (await cookies()).get(LOCALE_COOKIE)?.value;
+  return value && isLocale(value) ? value : DEFAULT_LOCALE;
+}
+
 export async function submitBooking(
   _prev: BookingState,
   formData: FormData,
 ): Promise<BookingState> {
+  const e = getDictionary(await actionLocale()).errors;
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const service = String(formData.get("service") ?? "").trim();
@@ -149,10 +166,10 @@ export async function submitBooking(
   const fieldErrors: BookingState["fieldErrors"] = {};
 
   if (name.length < 2) {
-    fieldErrors.name = "Вкажіть ім'я — щонайменше 2 символи.";
+    fieldErrors.name = e.name;
   }
   if (!isValidPhone(phone)) {
-    fieldErrors.phone = "Вкажіть номер телефону — 0XX XXX XX XX або +380 XX XXX XX XX.";
+    fieldErrors.phone = e.phone;
   }
 
   // Послугу звіряємо з базою, а не зі статичним списком: прайс тепер живе там.
@@ -164,7 +181,7 @@ export async function submitBooking(
     .maybeSingle();
 
   if (serviceError || !matched) {
-    fieldErrors.service = "Оберіть послугу зі списку.";
+    fieldErrors.service = e.service;
   }
 
   // Кабінет так само звіряємо з базою, а не з константою на клієнті.
@@ -176,7 +193,7 @@ export async function submitBooking(
     .maybeSingle();
 
   if (!matchedLocation) {
-    fieldErrors.location = "Оберіть кабінет зі списку.";
+    fieldErrors.location = e.location;
   }
 
   // Дату звіряємо з графіком, а не лише з «не в минулому».
@@ -189,13 +206,13 @@ export async function submitBooking(
   const locationSchedule = await readSchedule(location);
 
   if (!date) {
-    fieldErrors.date = "Оберіть бажану дату.";
+    fieldErrors.date = e.date;
   } else if (!locationSchedule) {
     // Кабінет без графіка: або його щойно закрили, або графік ще не заведено.
-    fieldErrors.date = "Для цього кабінету поки немає відкритих дат.";
+    fieldErrors.date = e.dateNone;
   } else if (!isDateAvailable(locationSchedule, date)) {
     fieldErrors.date =
-      "Ця дата вже недоступна — оберіть, будь ласка, іншу з відкритих.";
+      e.dateTaken;
   }
 
   // Канал звіряємо зі списком, а не довіряємо полю: за ним майстриня шукатиме
@@ -204,7 +221,7 @@ export async function submitBooking(
     ? channelRaw
     : "telegram";
   if (channelRaw && !isContactChannel(channelRaw)) {
-    fieldErrors.channel = "Оберіть спосіб зв'язку зі списку.";
+    fieldErrors.channel = e.channel;
   }
 
   // Нік — єдиний спосіб знайти пацієнта в Instagram, тож для месенджерів він
@@ -212,10 +229,10 @@ export async function submitBooking(
   const handle = normalizeHandle(handleRaw);
   if (needsHandle(channel)) {
     if (!handle) {
-      fieldErrors.handle = "Вкажіть нік — за ним я знайду вас, щоб написати.";
+      fieldErrors.handle = e.handle;
     } else if (!isValidHandle(handle)) {
       fieldErrors.handle =
-        "Нік складається з латинських літер, цифр, крапки й підкреслення.";
+        e.handleFormat;
     }
   }
 
@@ -224,7 +241,7 @@ export async function submitBooking(
   const parsedHeight = parseHeight(heightRaw);
   const heightCm = parsedHeight.ok ? parsedHeight.value : null;
   if (!parsedHeight.ok) {
-    fieldErrors.height = "Зріст у сантиметрах, наприклад 168.";
+    fieldErrors.height = e.height;
   }
 
   // Час звіряємо з робочими годинами дня — тими самими, з яких форма щойно
@@ -235,12 +252,12 @@ export async function submitBooking(
 
   if (!fieldErrors.date) {
     if (minutes === null) {
-      fieldErrors.time = "Оберіть час.";
+      fieldErrors.time = e.time;
     } else if (
       !locationSchedule ||
       !isTimeAvailable(locationSchedule, date, minutes)
     ) {
-      fieldErrors.time = "Цей час уже недоступний — оберіть інший.";
+      fieldErrors.time = e.timeTaken;
     }
   }
 
@@ -250,13 +267,13 @@ export async function submitBooking(
 
   // Без згоди заявку зберігати не можна: у ній телефон і дані про здоров'я.
   if (!consent) {
-    fieldErrors.consent = "Без згоди на обробку даних я не можу прийняти заявку.";
+    fieldErrors.consent = e.consent;
   }
 
   if (Object.keys(fieldErrors).length > 0) {
     return {
       status: "error",
-      message: "Перевірте виділені поля.",
+      message: e.check,
       fieldErrors,
       values,
     };
@@ -268,8 +285,7 @@ export async function submitBooking(
     return {
       status: "error",
       message:
-        "Ви вже надіслали кілька заявок. Я зв'яжуся з вами найближчим часом — " +
-        "якщо питання термінове, напишіть у Telegram чи Instagram.",
+        e.tooMany,
       values,
     };
   }
@@ -325,8 +341,7 @@ export async function submitBooking(
     return {
       status: "error",
       message:
-        "Не вдалося надіслати заявку. Напишіть, будь ласка, у Telegram або " +
-        "Instagram — я відповім одразу.",
+        e.failed,
       values,
     };
   }
@@ -390,9 +405,6 @@ export async function submitBooking(
     status: "success",
     // Відмічене протипоказання запис не блокує — рішення медичне і за
     // майстринею. Але обіцяти тверде підтвердження тут було б нечесно.
-    message: flagged
-      ? "Заявку прийнято. Ви відмітили стан, який треба узгодити перед " +
-        "процедурою, — я напишу вам, щоб уточнити деталі."
-      : "Заявку прийнято. Я зв'яжусь із вами найближчим часом, щоб підтвердити час.",
+    message: flagged ? e.sentFlagged : e.sent,
   };
 }

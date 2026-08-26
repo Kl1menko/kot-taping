@@ -77,6 +77,10 @@ function parse(formData: FormData) {
     id: String(formData.get("id") ?? "").trim(),
     title: String(formData.get("title") ?? "").trim(),
     summary: String(formData.get("summary") ?? "").trim(),
+    // Англійська версія. Порожньо — на /en показується український текст,
+    // тож незаповнене поле нічого не ламає (див. `public-services.ts`).
+    titleEn: String(formData.get("titleEn") ?? "").trim(),
+    summaryEn: String(formData.get("summaryEn") ?? "").trim(),
     price: String(formData.get("price") ?? "").trim(),
     priceFrom: formData.get("priceFrom") === "on",
     wear: String(formData.get("wear") ?? "").trim(),
@@ -132,6 +136,8 @@ export async function saveService(
   const row = {
     title: input.title,
     summary: input.summary,
+    title_en: input.titleEn || null,
+    summary_en: input.summaryEn || null,
     price,
     price_from: input.priceFrom,
     wear: input.wear || null,

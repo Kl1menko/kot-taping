@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { GALLERY, type GalleryItem } from "@/lib/gallery";
 import { Card, Container, SectionLabel } from "./ui";
+import { photoText, type Dictionary } from "@/lib/dictionary";
 
 /**
  * Галерея робіт — стрічка карток із перекриттям.
@@ -16,7 +17,7 @@ import { Card, Container, SectionLabel } from "./ui";
  * Клік відкриває фото на весь екран: на картці воно обрізане під однакову
  * пропорцію, і без перегляду деталь аплікації не роздивитись.
  */
-export function Gallery() {
+export function Gallery({ t }: { t: Dictionary }) {
   const [active, setActive] = useState<number | null>(null);
 
   // Без фото секції немає — порожня рамка з підписом «Роботи» виглядала б як
@@ -26,10 +27,10 @@ export function Gallery() {
   return (
     <Card as="section" id="gallery" tone="canvas" className="py-20 md:py-28">
       <Container>
-        <SectionLabel>Роботи</SectionLabel>
+        <SectionLabel>{t.gallerySection.label}</SectionLabel>
 
         <h2 className="mx-auto mt-10 max-w-[26ch] text-center text-[30px] leading-[1.15] sm:text-[40px] lg:text-[46px]">
-          Як це виглядає на практиці
+          {t.gallerySection.title}
         </h2>
       </Container>
 
@@ -48,7 +49,7 @@ export function Gallery() {
         >
           {GALLERY.map((item, i) => (
             <li key={item.src} className={cardCls(i, GALLERY.length)}>
-              <GalleryCard item={item} onOpen={() => setActive(i)} />
+              <GalleryCard item={item} t={t} onOpen={() => setActive(i)} />
             </li>
           ))}
         </ul>
@@ -57,6 +58,7 @@ export function Gallery() {
       {active !== null && (
         <Lightbox
           items={GALLERY}
+          t={t}
           index={active}
           onClose={() => setActive(null)}
           onMove={setActive}
@@ -133,10 +135,13 @@ function fanStyle(): React.CSSProperties {
 function GalleryCard({
   item,
   onOpen,
+  t,
 }: {
   item: GalleryItem;
   onOpen: () => void;
+  t: Dictionary;
 }) {
+  const photo = photoText(t, item.src, item);
   // Підпис у віялі не малюємо: сусідні картки перекриваються, і підписи
   // наїжджали б один на одного. Назву показує перегляд на весь екран, а для
   // читача з екрана вона є в aria-label кнопки.
@@ -145,9 +150,9 @@ function GalleryCard({
       type="button"
       onClick={onOpen}
       aria-label={
-        item.caption
-          ? `Відкрити фото: ${item.caption}. ${item.alt}`
-          : `Відкрити фото: ${item.alt}`
+        photo.caption
+          ? `${t.gallery.open}: ${photo.caption}. ${photo.alt}`
+          : `${t.gallery.open}: ${photo.alt}`
       }
       // Дві тіні: щільна близька відділяє картку від сусідньої в перекритті,
       // м'яка далека кладе віяло на площину — без неї картки здаються
@@ -159,7 +164,7 @@ function GalleryCard({
       <div className="relative aspect-[3/4] bg-canvas">
         <Image
           src={item.src}
-          alt={item.alt}
+          alt={photo.alt}
           fill
           // Збігається з `--fan-card` у fanStyle: браузер має обрати файл під
           // реальний розмір картки, а не під ширину екрана.
@@ -187,13 +192,16 @@ function Lightbox({
   index,
   onClose,
   onMove,
+  t,
 }: {
   items: GalleryItem[];
+  t: Dictionary;
   index: number;
   onClose: () => void;
   onMove: (i: number) => void;
 }) {
   const item = items[index];
+  const photo = photoText(t, item.src, item);
 
   const move = useCallback(
     (delta: number) => {
@@ -236,7 +244,7 @@ function Lightbox({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={item.caption ?? item.alt}
+      aria-label={photo.caption ?? photo.alt}
       // `dvh`, а не `vh`: на iOS адресний рядок ховається, і `100vh` вилазить
       // за екран разом із підписом.
       className="fixed inset-0 z-[200] h-[100dvh] w-screen bg-[#141414]/97 backdrop-blur-md"
@@ -251,7 +259,7 @@ function Lightbox({
         <div className="flex items-center justify-between gap-4 px-2">
           <div className="min-w-0">
             <p className="truncate text-[15px] leading-snug text-white sm:text-[17px]">
-              {item.caption ?? item.alt}
+              {photo.caption ?? photo.alt}
             </p>
             {items.length > 1 && (
               <p className="tnum mt-0.5 text-[13px] text-white/45">
@@ -263,7 +271,7 @@ function Lightbox({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрити"
+            aria-label={t.gallery.close}
             className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-white/10 text-white transition-colors duration-200 hover:bg-white/20"
           >
             <svg
@@ -289,8 +297,8 @@ function Lightbox({
         >
           {items.length > 1 && (
             <>
-              <Nav direction="prev" onClick={() => move(-1)} />
-              <Nav direction="next" onClick={() => move(1)} />
+              <Nav direction="prev" onClick={() => move(-1)} t={t} />
+              <Nav direction="next" onClick={() => move(1)} t={t} />
             </>
           )}
 
@@ -303,7 +311,7 @@ function Lightbox({
           <Image
             key={item.src}
             src={item.src}
-            alt={item.alt}
+            alt={photo.alt}
             fill
             sizes="100vw"
             // `object-contain` вписує кадр у рядок без обрізання, а сам `img`
@@ -321,9 +329,11 @@ function Lightbox({
 function Nav({
   direction,
   onClick,
+  t,
 }: {
   direction: "prev" | "next";
   onClick: () => void;
+  t: Dictionary;
 }) {
   const isPrev = direction === "prev";
   return (
@@ -333,7 +343,7 @@ function Nav({
         e.stopPropagation();
         onClick();
       }}
-      aria-label={isPrev ? "Попереднє фото" : "Наступне фото"}
+      aria-label={isPrev ? t.gallery.prev : t.gallery.next}
       className={[
         "absolute top-1/2 z-10 grid size-11 -translate-y-1/2 cursor-pointer place-items-center rounded-full",
         "bg-white/10 text-white backdrop-blur transition-colors duration-200 hover:bg-white/20",

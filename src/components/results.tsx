@@ -3,41 +3,19 @@
 import { useRef } from "react";
 import Image from "next/image";
 import { Card, SectionLabel } from "./ui";
+import type { Dictionary } from "@/lib/dictionary";
 
 /**
- * Готові колажі «до/після» — картинка вже містить обидва кадри й підписи,
- * тому компонент лише розкладає їх стрічкою, не будуючи порівняння сам.
+ * Порядок колажів у стрічці. Самі описи лежать у словнику — тут лише
+ * послідовність, бо вона однакова для обох мов.
  */
-const RESULTS = [
-  { src: "neck", alt: "Підборіддя та шия до і після курсу тейпування" },
-  { src: "face-profile", alt: "Овал обличчя в профіль до і після тейпування" },
-  { src: "belly", alt: "Живіт до і після лімфодренажного тейпування" },
-  { src: "legs-back", alt: "Задня поверхня стегон до і після тейпування" },
-  { src: "legs-side", alt: "Гомілки до і після лімфодренажного тейпування" },
+const PHOTOS = [
+  "neck",
+  "face-profile",
+  "belly",
+  "legs-back",
+  "legs-side",
 ] as const;
-
-const STEPS = [
-  {
-    n: "01",
-    title: "Консультація",
-    text: "Розбираємо запит, протипоказання та очікування.",
-  },
-  {
-    n: "02",
-    title: "Схема",
-    text: "Підбираю аплікацію під вашу анатомію й задачу.",
-  },
-  {
-    n: "03",
-    title: "Сеанс",
-    text: "Наношу тейпи, показую, як носити й знімати.",
-  },
-  {
-    n: "04",
-    title: "Підтримка",
-    text: "Домашні рекомендації та план наступних візитів.",
-  },
-];
 
 /** Кругла стрілка гортання — та сама форма, що й у стрічці наборів. */
 function ScrollButton({
@@ -72,7 +50,7 @@ function ScrollButton({
   );
 }
 
-export function Results() {
+export function Results({ t }: { t: Dictionary }) {
   const trackRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -91,10 +69,10 @@ export function Results() {
   return (
     <Card as="section" id="results" tone="canvas" className="py-20 md:py-28">
       <div className="mx-auto w-full max-w-[1360px] px-5 md:px-10">
-        <SectionLabel>Результати</SectionLabel>
+        <SectionLabel>{t.results.label}</SectionLabel>
 
         <h2 className="mx-auto mt-10 max-w-[26ch] text-center text-[30px] leading-[1.15] sm:text-[40px] lg:text-[46px]">
-          Фото «до» та «після» — з дозволу клієнтів
+          {t.results.title}
         </h2>
 
         {/* Один рядок із горизонтальним гортанням, а не сітка: колажі
@@ -113,15 +91,15 @@ export function Results() {
             "md:-mx-10 md:px-10",
           ].join(" ")}
         >
-          {RESULTS.map((item) => (
+          {PHOTOS.map((photo) => (
             <div
-              key={item.src}
+              key={photo}
               className="w-[78%] shrink-0 snap-start sm:w-[46%] lg:w-[31%]"
             >
               <div className="relative aspect-[9/16] overflow-hidden rounded-[var(--radius-tile)] bg-sand">
                 <Image
-                  src={`/images/results/${item.src}.webp`}
-                  alt={item.alt}
+                  src={`/images/results/${photo}.webp`}
+                  alt={t.results.photos[photo]}
                   fill
                   sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 78vw"
                   className="object-cover"
@@ -133,12 +111,12 @@ export function Results() {
 
         {/* Стрілки лише з десктопа: на телефоні гортають пальцем. */}
         <div aria-hidden="true" className="mt-5 hidden justify-end gap-2 lg:flex">
-          <ScrollButton onClick={() => scrollBy(-1)} label="Назад" back />
-          <ScrollButton onClick={() => scrollBy(1)} label="Далі" />
+          <ScrollButton onClick={() => scrollBy(-1)} label={t.results.prev} back />
+          <ScrollButton onClick={() => scrollBy(1)} label={t.results.next} />
         </div>
 
         <ol className="mt-16 grid gap-8 border-t border-line pt-10 sm:grid-cols-2 lg:grid-cols-4">
-          {STEPS.map((step) => (
+          {t.results.steps.map((step) => (
             <li key={step.n}>
               <span className="tnum text-[13px] text-ink-muted">{step.n}</span>
               <h3 className="mt-3 text-[19px]">{step.title}</h3>

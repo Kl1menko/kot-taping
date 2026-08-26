@@ -14,8 +14,10 @@ import {
   type ServiceCategory,
 } from "@/lib/services";
 import { Card, Container, SectionLabel } from "./ui";
+import type { Dictionary } from "@/lib/dictionary";
+import { localePath, type Locale } from "@/lib/i18n";
 
-function ServiceCard({ service }: { service: Service }) {
+function ServiceCard({ service, t }: { service: Service; t: Dictionary }) {
   const meta = serviceMeta(service);
   const { open } = useBookingModal();
   return (
@@ -45,10 +47,10 @@ function ServiceCard({ service }: { service: Service }) {
           <button
             type="button"
             onClick={() => open(service.slug)}
-            aria-label={`Записатись на «${service.title}»`}
+            aria-label={t.services.bookAria.replace("{service}", service.title)}
             className="group inline-flex min-h-[48px] min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-full bg-white/85 py-1.5 pl-4 pr-1.5 text-[15px] backdrop-blur transition-colors duration-200 hover:bg-white"
           >
-            <span className="truncate">Записатись</span>
+            <span className="truncate">{t.services.book}</span>
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-ink ring-1 ring-inset ring-line transition-transform duration-200 group-hover:translate-x-0.5">
               <svg
                 viewBox="0 0 24 24"
@@ -94,7 +96,15 @@ function ServiceCard({ service }: { service: Service }) {
  * яких справді є послуги: майстриня може сховати всю категорію, і порожня
  * вкладка виглядала б як помилка.
  */
-export function Services({ services }: { services: Service[] }) {
+export function Services({
+  services,
+  t,
+  locale,
+}: {
+  services: Service[];
+  t: Dictionary;
+  locale: Locale;
+}) {
   const categories = CATEGORIES.filter((cat) =>
     services.some((s) => s.category === cat.id),
   );
@@ -115,10 +125,10 @@ export function Services({ services }: { services: Service[] }) {
       className="scroll-mt-0 py-20 md:py-28"
     >
       <Container>
-      <SectionLabel>Послуги</SectionLabel>
+      <SectionLabel>{t.services.label}</SectionLabel>
 
       <h2 className="mt-6 max-w-[24ch] text-[30px] leading-[1.15] sm:text-[40px] lg:text-[46px]">
-        Схеми, підібрані під вашу задачу, а не за шаблоном
+        {t.services.title}
       </h2>
 
       {/* Numbered pill tabs from the reference. Six categories don't fit one
@@ -132,7 +142,7 @@ export function Services({ services }: { services: Service[] }) {
       <div className="mt-10 -mx-5 min-w-0 overflow-x-auto overscroll-x-contain px-5 md:mx-0 md:overflow-x-visible md:px-0">
         <div
           role="tablist"
-          aria-label="Категорії послуг"
+          aria-label={t.services.tabs}
           className="flex w-max gap-2 md:w-auto md:flex-wrap"
         >
           {categories.map((cat, i) => {
@@ -157,7 +167,7 @@ export function Services({ services }: { services: Service[] }) {
                 <span className="tnum text-[11px] text-ink-muted">
                   0{i + 1}
                 </span>
-                {cat.label}
+                {t.categories[cat.id].label}
               </button>
             );
           })}
@@ -175,7 +185,7 @@ export function Services({ services }: { services: Service[] }) {
             key={service.slug}
             className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
           >
-            <ServiceCard service={service} />
+            <ServiceCard service={service} t={t} />
           </div>
         ))}
       </div>
@@ -188,11 +198,13 @@ export function Services({ services }: { services: Service[] }) {
       {active && (
         <div className="mt-12">
           <Link
-            href={`/poslugy/${active}`}
+            href={localePath(locale, `/poslugy/${active}`)}
             className="inline-flex min-h-[52px] items-center gap-3 rounded-full bg-canvas px-7 text-[15px] transition-colors duration-200 hover:bg-ink hover:text-white"
           >
-            Детальніше про напрям «
-            {categories.find((c) => c.id === active)?.label}»
+            {t.services.more.replace(
+              "{category}",
+              t.categories[active].label,
+            )}
             <span aria-hidden="true">→</span>
           </Link>
         </div>

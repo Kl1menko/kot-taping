@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { useBookingModal } from "./booking-modal";
 import { SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
+import { LanguageSwitch } from "./language-switch";
+import type { Dictionary } from "@/lib/dictionary";
+import { localePath, type Locale } from "@/lib/i18n";
 
 /**
  * «Послуги» ведуть на окрему сторінку, а не на якір: це справжній маршрут із
@@ -17,14 +20,18 @@ import { SocialIcon } from "./social-icons";
  * сторінки ще й викидав на головну. Запис відкривається модалкою, і в меню він
  * стоїть окремою кнопкою, а не рядком серед якорів.
  */
-const NAV = [
-  { href: "/poslugy", label: "Послуги" },
-  { href: "/#about", label: "Про мене" },
-  { href: "/#results", label: "Результати" },
-  { href: "/#faq", label: "Питання" },
-];
+export function SiteHeader({ t, locale }: { t: Dictionary; locale: Locale }) {
+  /**
+   * Шляхи будуються під поточну мову: англійська версія має вести на /en/…,
+   * інакше кожен пункт меню викидав би людину назад на українську.
+   */
+  const nav = [
+    { href: localePath(locale, "/poslugy"), label: t.nav.services },
+    { href: localePath(locale, "/#about"), label: t.nav.about },
+    { href: localePath(locale, "/#results"), label: t.nav.results },
+    { href: localePath(locale, "/#faq"), label: t.nav.faq },
+  ];
 
-export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const { open: openBooking } = useBookingModal();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -56,7 +63,10 @@ export function SiteHeader() {
 
   return (
     <header className="relative z-50 flex items-center justify-between px-5 py-6 md:px-10 md:py-8 lg:pl-[var(--gutter-edge-sm)]">
-      <Link href="/" className="flex items-center gap-3">
+      <Link
+        href={localePath(locale, "/")}
+        className="mr-6 flex shrink-0 items-center gap-3 xl:mr-10"
+      >
         <span
           className="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-white"
           aria-hidden="true"
@@ -72,7 +82,9 @@ export function SiteHeader() {
             <path d="M12 3v18M3.8 7.5l16.4 9M20.2 7.5l-16.4 9" />
           </svg>
         </span>
-        <span className="text-[15px] leading-tight">
+        {/* `whitespace-nowrap`: у flex-ряду з шістьма елементами логотип
+            стискався, і «Taping» заповзав під перший пункт меню. */}
+        <span className="whitespace-nowrap text-[15px] leading-tight">
           Kotova
           <br />
           Taping
@@ -81,13 +93,27 @@ export function SiteHeader() {
 
       {/* Соцмережі в десктопному меню не дублюємо — вони лишаються у
           мобільній панелі та у футері. */}
-      <div className="hidden items-center gap-8 md:flex">
-        <nav aria-label="Головне меню" className="flex items-center gap-8">
-          {NAV.map((item) => (
+      {/* Проміжки звужені й ростуть лише з xl.
+
+          Перемикач мови додав до ряду шостий елемент, і найтісніше вийшло
+          саме на lg (1024–1280): там герой стає двоколонковим, тож уся шапка
+          тулиться в ліву колонку — вужчу за екран. Логотип наїжджав на перший
+          пункт, а «Про мене» ламалось на два рядки. `whitespace-nowrap` не
+          дає пунктам розриватись, `shrink-0` захищає логотип.
+
+          «Запис» на lg ховається: він єдиний дублює дію, доступну і з
+          липкої кнопки, і з кожної картки послуги, — тож із шести елементів
+          саме він коштує найменше. З xl, де місця досить, повертається. */}
+      <div className="hidden items-center gap-4 md:flex xl:gap-6">
+        <nav
+          aria-label={t.nav.menuLabel}
+          className="flex items-center gap-5 xl:gap-8"
+        >
+          {nav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="text-[15px] text-ink-muted transition-colors duration-200 hover:text-ink"
+              className="whitespace-nowrap text-[15px] text-ink-muted transition-colors duration-200 hover:text-ink"
             >
               {item.label}
             </Link>
@@ -96,11 +122,13 @@ export function SiteHeader() {
           <button
             type="button"
             onClick={() => openBooking()}
-            className="cursor-pointer text-[15px] text-ink-muted transition-colors duration-200 hover:text-ink"
+            className="cursor-pointer whitespace-nowrap text-[15px] text-ink-muted transition-colors duration-200 hover:text-ink lg:max-xl:hidden"
           >
-            Запис
+            {t.nav.booking}
           </button>
         </nav>
+
+        <LanguageSwitch locale={locale} label={t.nav.languageLabel} />
       </div>
 
       {/* Burger — solid ink pill so it reads against the white hero, with the
@@ -108,7 +136,7 @@ export function SiteHeader() {
       <button
         ref={toggleRef}
         type="button"
-        aria-label={open ? "Закрити меню" : "Відкрити меню"}
+        aria-label={open ? t.nav.closeMenu : t.nav.openMenu}
         aria-expanded={open}
         aria-controls="mobile-nav"
         onClick={() => setOpen((v) => !v)}
@@ -176,10 +204,20 @@ export function SiteHeader() {
             <br />
             Taping
           </span>
+
+          {/* Перемикач і в шторці: на телефоні десктопної шапки не видно, а
+              мова має перемикатися з будь-якого екрана.
+
+              `mr-14` лишає місце під кнопку-бургер: вона лежить у шапці з
+              `z-50`, тобто поверх цієї панелі, і без відступу накривала б
+              собою праву половину перемикача. */}
+          <div className="ml-auto mr-14">
+            <LanguageSwitch locale={locale} label={t.nav.languageLabel} />
+          </div>
         </div>
 
-        <nav aria-label="Мобільне меню" className="mt-8 px-3">
-          {NAV.map((item, i) => (
+        <nav aria-label={t.nav.menuLabel} className="mt-8 px-3">
+          {nav.map((item, i) => (
             <Link
               key={item.href}
               href={item.href}
@@ -205,7 +243,7 @@ export function SiteHeader() {
             }}
             className="flex w-full min-h-[56px] cursor-pointer items-center justify-between gap-4 rounded-full bg-ink py-2 pl-6 pr-2 text-[16px] text-white"
           >
-            Записатись на сеанс
+            {t.booking.cta}
             <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-ink">
               <svg
                 viewBox="0 0 24 24"
@@ -223,7 +261,7 @@ export function SiteHeader() {
           </button>
 
           <nav
-            aria-label="Соцмережі"
+            aria-label={t.nav.socials}
             className="mt-5 flex flex-wrap justify-center gap-2 pb-1"
           >
             {SOCIALS.map((s) => (

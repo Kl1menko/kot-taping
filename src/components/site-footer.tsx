@@ -4,8 +4,16 @@ import { CATEGORIES } from "@/lib/services";
 import { SocialIcon } from "./social-icons";
 import { FooterBookLink } from "./footer-book-link";
 import { Card, Container } from "./ui";
+import { cityLabel, type Dictionary } from "@/lib/dictionary";
+import { localePath, type Locale } from "@/lib/i18n";
 
-export function SiteFooter() {
+export function SiteFooter({
+  t,
+  locale,
+}: {
+  t: Dictionary;
+  locale: Locale;
+}) {
   return (
     <Card as="footer" tone="canvas" className="py-16 md:py-20">
       <Container>
@@ -17,12 +25,12 @@ export function SiteFooter() {
             Taping
           </p>
           <p className="mt-6 max-w-[34ch] text-[15px] leading-relaxed text-ink-muted">
-            Студія естетичного тейпування. Працюю за попереднім записом.
+            {t.footer.tagline}
           </p>
         </div>
 
         <div className="flex flex-col gap-6 md:items-end">
-          <nav aria-label="Соцмережі" className="flex flex-wrap gap-2">
+          <nav aria-label={t.nav.socials} className="flex flex-wrap gap-2">
             {SOCIALS.map((s) => (
               <a
                 key={s.id}
@@ -38,7 +46,7 @@ export function SiteFooter() {
           </nav>
 
           <nav
-            aria-label="Контакти"
+            aria-label={t.nav.contacts}
             className="flex flex-wrap gap-x-8 gap-y-3 text-[15px] md:justify-end"
           >
             <a
@@ -61,33 +69,36 @@ export function SiteFooter() {
         sitemap.xml, який відповідає на «що існує», але не на «що тут головне».
       */}
       <div className="mt-14 grid gap-10 border-t border-line pt-10 sm:grid-cols-2 lg:grid-cols-[2fr_1fr]">
-        <nav aria-label="Послуги">
-          <h2 className="text-[14px] text-ink-muted">Послуги</h2>
+        <nav aria-label={t.footer.services}>
+          <h2 className="text-[14px] text-ink-muted">{t.footer.services}</h2>
           <ul className="mt-4 grid gap-x-8 gap-y-2 sm:grid-cols-2">
             {CATEGORIES.map((cat) => (
               <li key={cat.id}>
                 <Link
-                  href={`/poslugy/${cat.id}`}
+                  href={localePath(locale, `/poslugy/${cat.id}`)}
                   className="text-[15px] underline-offset-4 transition-colors duration-200 hover:underline"
                 >
-                  {cat.label}
+                  {t.categories[cat.id].label}
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
 
-        <nav aria-label="Кабінети">
-          <h2 className="text-[14px] text-ink-muted">Кабінети</h2>
+        <nav aria-label={t.footer.offices}>
+          <h2 className="text-[14px] text-ink-muted">{t.footer.offices}</h2>
           <ul className="mt-4 space-y-2">
             {LOCATIONS.map((location) => (
               <li key={location.slug}>
                 <Link
-                  href={`/mistsya/${location.slug}`}
+                  href={localePath(locale, `/mistsya/${location.slug}`)}
                   className="text-[15px] underline-offset-4 transition-colors duration-200 hover:underline"
                 >
-                  {location.city}
-                  <span className="text-ink-muted"> — {location.address}</span>
+                  {cityLabel(t, location.slug).city || location.city}
+                  <span className="text-ink-muted">
+                    {" "}
+                    — {cityLabel(t, location.slug).address || location.address}
+                  </span>
                 </Link>
               </li>
             ))}
