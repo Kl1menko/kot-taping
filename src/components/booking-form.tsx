@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { submitBooking, type BookingState } from "@/app/actions";
+import { fetchBusySlots, submitBooking, type BookingState } from "@/app/actions";
 import { CATEGORIES, formatPrice, type Service } from "@/lib/services";
 import { LOCATIONS, SOCIALS } from "@/lib/contacts";
 import { SocialIcon } from "./social-icons";
@@ -14,8 +14,10 @@ import {
   formatTime,
   hoursFor,
   hoursLabel,
-  timesFor,
+  timeOptions,
+  toBusy,
   toSchedule,
+  type BusySlot,
   type WorkingDay,
 } from "@/lib/schedule";
 import {
@@ -227,17 +229,83 @@ export function BookingForm({
   // Дата зі стану, а не з DOM: від неї залежить сітка часу нижче.
   const [date, setDate] = useState(sent?.date ?? "");
 
-  // Час, на який справді можна записатись цього дня. Рахується з робочих
-  // годин, тож розійтися з розкладом майстрині не може.
-  const times = useMemo(
-    () => timesFor(daysForLocation, date),
-    [daysForLocation, date],
+  /**
+   * Зайняті години кабінету — підтверджені записи з журналу майстрині.
+   *
+   * Тягнемо дією при виборі кабінету, а не пропсом сторінки: публічні
+   * сторінки статичні з `revalidate = 3600`, тож вбудована в них зайнятість
+   * була б застарілою на годину. Тут вона на момент відкриття форми.
+   */
+  const [busySlots, setBusySlots] = useState<{
+    location: string;
+    slots: BusySlot[];
+  }>({ location: "", slots: [] });
+
+  useEffect(() => {
+    if (!location) return;
+
+    // Кабінет могли перемкнути, поки запит іще летить: пізня відповідь на
+    // старий кабінет не має перетерти свіжу — звідси прапорець. Разом із
+    // ключем нижче він же боронить від показу чужої зайнятості.
+    let current = true;
+    fetchBusySlots(location)
+      .then((slots) => {
+        if (current) setBusySlots({ location, slots });
+      })
+      .catch(() => {
+        // Мовчазний відкат до «нічого не зайнято»: сітка поводиться як
+        // раніше, а справжню перевірку однаково зробить Server Action.
+        if (current) setBusySlots({ location, slots: [] });
+      });
+
+    return () => {
+      current = false;
+    };
+  }, [location]);
+
+  /**
+   * Зайняте — лише якщо воно про поточний кабінет.
+   *
+   * Поки відповідь на новий кабінет летить, у стані ще лежить попередня, і
+   * показати її означало б погасити години, вільні в цьому місті. Порівняння
+   * під час рендеру дешевше й чесніше за скидання стану ефектом.
+   */
+  const busyForLocation = useMemo(
+    () =>
+      toBusy(busySlots.location === location && location ? busySlots.slots : []),
+    [busySlots, location],
   );
+
+  // Час, на який справді можна записатись цього дня. Рахується з робочих
+  // годин, тож розійтися з розкладом майстрині не може. Зайняті години не
+  // зникають, а помічаються: порожнє місце в сітці клієнтка прочитала б як
+  // «майстриня тоді не працює».
+  const times = useMemo(
+    () => timeOptions(daysForLocation, busyForLocation, date),
+    [daysForLocation, busyForLocation, date],
+  );
+
+  // Чи лишилось у дні бодай щось вільне — від цього залежить підпис під сіткою.
+  const anyFree = times.some((o) => !o.taken);
+  const anyBusy = times.some((o) => o.taken);
 
   const dayHours = hoursFor(daysForLocation, date);
 
   // Обраний час — теж у стані: поле приховане, а плитки малює React.
-  const [time, setTime] = useState(sent?.time ?? "");
+  const [picked, setTime] = useState(sent?.time ?? "");
+
+  /**
+   * Обраний час, який ще має сенс.
+   *
+   * Годину могли зайняти, поки людина заповнювала анкету, — або зайнятість
+   * доїхала вже після того, як вона тицьнула плитку. Рахуємо це під час
+   * рендеру, а не скидаємо стан ефектом: похідне значення не має бути ще
+   * однією копією правди, яку доводиться синхронізувати.
+   */
+  const time =
+    picked && times.some((o) => formatTime(o.minutes) === picked && o.taken)
+      ? ""
+      : picked;
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -448,7 +516,7 @@ export function BookingForm({
         ) : (
           <>
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {times.map((minutes) => {
+              {times.map(({ minutes, taken }) => {
                 const value = formatTime(minutes);
                 const active = value === time;
 
@@ -457,13 +525,29 @@ export function BookingForm({
                     key={value}
                     type="button"
                     onClick={() => setTime(value)}
+                    // Зайняту годину не даємо натиснути ні мишею, ні з
+                    // клавіатури: показати її сірою, але клікабельною —
+                    // значить пустити людину в помилку, яку одразу ж
+                    // повернемо з сервера.
+                    disabled={taken}
                     aria-pressed={active}
+                    // Сірий колір — єдиний сигнал для того, хто бачить екран;
+                    // читачеві з екрана потрібне слово.
+                    aria-label={
+                      taken
+                        ? t.form.timeBusyLabel.replace("{time}", value)
+                        : undefined
+                    }
                     className={[
-                      "tnum min-h-[48px] cursor-pointer rounded-2xl border text-[15px]",
+                      "tnum min-h-[48px] rounded-2xl border text-[15px]",
                       "transition-colors duration-200",
-                      active
-                        ? "border-ink bg-ink text-white"
-                        : "border-line bg-canvas hover:border-ink",
+                      taken
+                        ? // Закреслення, а не сама лише сірість: різниця
+                          // помітна й тим, хто погано розрізняє контраст.
+                          "cursor-not-allowed border-line bg-canvas text-ink-muted/50 line-through"
+                        : active
+                          ? "cursor-pointer border-ink bg-ink text-white"
+                          : "cursor-pointer border-line bg-canvas hover:border-ink",
                     ].join(" ")}
                   >
                     {value}
@@ -472,9 +556,13 @@ export function BookingForm({
               })}
             </div>
             <span className="mt-1.5 block text-[13px] text-ink-muted">
-              {dayHours
-                ? t.form.timeHours.replace("{hours}", hoursLabel(dayHours))
-                : t.form.timeHint}
+              {!anyFree
+                ? t.form.allBusy
+                : anyBusy
+                  ? t.form.timeSomeBusy
+                  : dayHours
+                    ? t.form.timeHours.replace("{hours}", hoursLabel(dayHours))
+                    : t.form.timeHint}
             </span>
           </>
         )}

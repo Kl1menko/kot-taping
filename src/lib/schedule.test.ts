@@ -18,7 +18,11 @@ import {
   slotForTime,
   slotsFromHours,
   timesFor,
+  timeOptions,
+  toBusy,
   toSchedule,
+  hasFreeTime,
+  isTimeTaken,
   upcomingDays,
 } from "./schedule.ts";
 
@@ -261,4 +265,77 @@ test("день без жодного відрізка до графіка не �
   // Інакше він виглядав би відкритим, але записатись у нього не було б як.
   const s = toSchedule([{ day: "2026-08-10", intervals: [] }]);
   assert.equal(isWorkingDay(s, "2026-08-10"), false);
+});
+
+/** Зайняте, заданий по-людськи: `busy(["2026-08-10","15:00","16:30"])`. */
+function busy(...slots: [string, string, string][]) {
+  return toBusy(
+    slots.map(([day, from, to]) => ({
+      day,
+      startsAt: parseTime(from)!,
+      endsAt: parseTime(to)!,
+    })),
+  );
+}
+
+test("зайнята година гасне, сусідні лишаються вільними", () => {
+  const s = schedule(["2026-08-10", "10:00", "12:00"]);
+  const b = busy(["2026-08-10", "10:30", "11:00"]);
+
+  assert.deepEqual(
+    timeOptions(s, b, "2026-08-10", MORNING).map((o) => [
+      formatTime(o.minutes),
+      o.taken,
+    ]),
+    [
+      ["10:00", false],
+      ["10:30", true],
+      ["11:00", false],
+      ["11:30", false],
+    ],
+  );
+});
+
+test("довгий запис гасить усі клітинки, в які впирається", () => {
+  const s = schedule(["2026-08-10", "14:00", "18:00"]);
+  // Півтори години з 15:00 накривають 15:00, 15:30 і 16:00.
+  const b = busy(["2026-08-10", "15:00", "16:30"]);
+
+  const taken = timeOptions(s, b, "2026-08-10", MORNING)
+    .filter((o) => o.taken)
+    .map((o) => formatTime(o.minutes));
+
+  assert.deepEqual(taken, ["15:00", "15:30", "16:00"]);
+});
+
+test("запис, що закінчується рівно о слоті, його не займає", () => {
+  const s = schedule(["2026-08-10", "10:00", "12:00"]);
+  const b = busy(["2026-08-10", "10:00", "11:00"]);
+
+  // 11:00 — саме коли попередній сеанс завершився, тож година вільна.
+  assert.equal(isTimeTaken(b, "2026-08-10", parseTime("11:00")!), false);
+  assert.equal(isTimeTaken(b, "2026-08-10", parseTime("10:30")!), true);
+  assert.equal(hasFreeTime(s, b, "2026-08-10", MORNING), true);
+});
+
+test("зайняте в інший день на сітку не впливає", () => {
+  const b = busy(["2026-08-11", "10:00", "18:00"]);
+  assert.equal(isTimeTaken(b, "2026-08-10", parseTime("10:00")!), false);
+});
+
+test("день, розібраний записами повністю, вільних годин не має", () => {
+  const s = schedule(["2026-08-10", "10:00", "12:00"]);
+  const b = busy(["2026-08-10", "10:00", "12:00"]);
+
+  assert.equal(hasFreeTime(s, b, "2026-08-10", MORNING), false);
+  assert.ok(timeOptions(s, b, "2026-08-10", MORNING).every((o) => o.taken));
+});
+
+test("вивернутий чи порожній проміжок нічого не займає", () => {
+  const b = busy(
+    ["2026-08-10", "12:00", "12:00"],
+    ["2026-08-10", "15:00", "14:00"],
+  );
+  assert.equal(isTimeTaken(b, "2026-08-10", parseTime("12:00")!), false);
+  assert.equal(isTimeTaken(b, "2026-08-10", parseTime("14:00")!), false);
 });

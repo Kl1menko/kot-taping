@@ -306,3 +306,89 @@ export function countInMonth(schedule: Schedule, month: Date): number {
   const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-`;
   return [...schedule.keys()].filter((day) => day.startsWith(prefix)).length;
 }
+
+/**
+ * Зайнятий проміжок: підтверджений запис, що вже стоїть у журналі.
+ *
+ * `day` — той самий ключ `2026-08-08`, що й усюди в модулі, а `startsAt` і
+ * `endsAt` — хвилини від опівночі. Дата й час розбираються один раз на межі
+ * БД (`listBusySlots`), сюди приходять уже числами: модуль лишається чистим і
+ * не залежить ні від зони процесу, ні від формату Postgres.
+ */
+export type BusySlot = { day: string; startsAt: number; endsAt: number };
+
+/** Зайняте по днях — у такому вигляді його питають і форма, і перевірка. */
+export type Busy = Map<string, BusySlot[]>;
+
+export function toBusy(slots: readonly BusySlot[]): Busy {
+  const byDay: Busy = new Map();
+  for (const slot of slots) {
+    // Порожній чи вивернутий проміжок нічого не займає — такий запис у сітці
+    // виглядав би зайнятою годиною, якої насправді немає.
+    if (slot.endsAt <= slot.startsAt) continue;
+    const forDay = byDay.get(slot.day);
+    if (forDay) forDay.push(slot);
+    else byDay.set(slot.day, [slot]);
+  }
+  return byDay;
+}
+
+/**
+ * Чи перекриває якийсь запис слот, що починається о `minutes`.
+ *
+ * Слот займає `SLOT_STEP_MIN` хвилин — рівно клітинку сітки, а не тривалість
+ * послуги, яку клієнтка ще не обрала. Тому запис 15:00–16:30 гасить 15:00,
+ * 15:30 і 16:00: усі три клітинки в нього впираються.
+ *
+ * Умова перетину строга з обох боків (`a < bEnd && b < aEnd`) — та сама, що в
+ * `overlaps` для календаря адмінки. Завдяки їй запис, що закінчується рівно о
+ * 16:00, слот 16:00 не займає: наступний сеанс починається саме тоді.
+ */
+export function isTimeTaken(
+  busy: Busy,
+  day: string,
+  minutes: number,
+  step = SLOT_STEP_MIN,
+): boolean {
+  const slots = busy.get(day);
+  if (!slots) return false;
+
+  const end = minutes + step;
+  return slots.some((s) => minutes < s.endsAt && s.startsAt < end);
+}
+
+/**
+ * Години дня з позначкою зайнятості — саме те, що малює форма.
+ *
+ * Зайняті години не викидаємо, а помічаємо: порожнє місце в сітці клієнтка
+ * прочитала б як «майстриня тоді не працює» й пішла б шукати інший день.
+ * Сіра неактивна плитка чесніша — видно, що година є, але вже зайнята.
+ */
+export function timeOptions(
+  schedule: Schedule,
+  busy: Busy,
+  day: string,
+  now = new Date(),
+): { minutes: number; taken: boolean }[] {
+  return timesFor(schedule, day, now).map((minutes) => ({
+    minutes,
+    taken: isTimeTaken(busy, day, minutes),
+  }));
+}
+
+/**
+ * Чи лишилась цього дня бодай одна вільна година.
+ *
+ * Потрібно календарю: день, повністю розібраний записами, відкритим уже не є,
+ * і пропонувати його в сітці дат означало б вести людину в глухий кут.
+ */
+export function hasFreeTime(
+  schedule: Schedule,
+  busy: Busy,
+  day: string,
+  now = new Date(),
+): boolean {
+  return timesFor(schedule, day, now).some(
+    (minutes) => !isTimeTaken(busy, day, minutes),
+  );
+}

@@ -9,12 +9,16 @@ import { sendPush } from "@/lib/push";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { dayTitle } from "@/lib/calendar";
 import { readSchedule } from "@/lib/db/working-days";
+import { listBusySlots } from "@/lib/db/busy";
 import {
   formatTime,
   isDateAvailable,
   isTimeAvailable,
+  isTimeTaken,
   parseTime,
   slotForTime,
+  toBusy,
+  type BusySlot,
 } from "@/lib/schedule";
 import {
   contraindicationLabels,
@@ -115,6 +119,26 @@ async function tooManyFrom(phone: string): Promise<boolean> {
 async function actionLocale() {
   const value = (await cookies()).get(LOCALE_COOKIE)?.value;
   return value && isLocale(value) ? value : DEFAULT_LOCALE;
+}
+
+/**
+ * Зайняті години кабінету — для форми, яка щойно відкрилась.
+ *
+ * Окремою дією, а не пропсом сторінки, свідомо: публічні сторінки статичні з
+ * `revalidate = 3600`, тож зайнятість, вбудована в їхній HTML, була б застарілою
+ * на годину — і форма показувала б вільною годину, зайняту сорок хвилин тому.
+ * Дія ж виконується в момент відкриття форми й повертає стан на зараз.
+ *
+ * Повертаємо лише проміжки — без імен, послуг і будь-чого про людину, яка
+ * записана. Клієнтці досить знати, що година зайнята; чия вона — не її справа,
+ * а на публічний ендпоінт такі дані виносити не можна взагалі.
+ */
+export async function fetchBusySlots(
+  locationSlug: string,
+): Promise<BusySlot[]> {
+  if (!locationSlug) return [];
+  const byLocation = await listBusySlots();
+  return byLocation[locationSlug] ?? [];
 }
 
 export async function submitBooking(
@@ -258,6 +282,19 @@ export async function submitBooking(
       !isTimeAvailable(locationSchedule, date, minutes)
     ) {
       fieldErrors.time = e.timeTaken;
+    } else {
+      /**
+       * Година вільна в графіку — але чи не зайнята вона вже записом.
+       *
+       * Перевірка тут обов'язкова, а не лише в формі: сітку клієнтка бачила в
+       * момент відкриття, і поки вона заповнювала вісімнадцять полів, ту саму
+       * годину могли зайняти. Плюс поле `time` приходить із браузера, і
+       * покластися на те, що воно з нашої сітки, не можна.
+       */
+      const busy = toBusy(await fetchBusySlots(location));
+      if (isTimeTaken(busy, date, minutes)) {
+        fieldErrors.time = e.timeBusy;
+      }
     }
   }
 

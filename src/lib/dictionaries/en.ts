@@ -74,6 +74,12 @@ export const en = {
     date: "Preferred date",
     time: "Time",
     timeHint: "Pick a time that suits you.",
+    /** Підпис під сіткою, коли частину годин уже зайнято. */
+    timeSomeBusy: "Greyed-out hours are already booked.",
+    /** Для читача екрана — сама лише сірість про зайнятість не скаже. */
+    timeBusyLabel: "{time} — booked",
+    /** День відкритий, але всі його години вже розібрані. */
+    allBusy: "Every hour on this day is booked. Please pick another date.",
     timeHours: "On this day I work {hours}.",
     contactTitle: "How to reach you",
     contactHint: "I will send a confirmation with the details.",
@@ -239,6 +245,8 @@ export const en = {
     height: "Height in centimetres, for example 168.",
     time: "Choose a time.",
     timeTaken: "That time is no longer available — please pick another one.",
+    timeBusy:
+      "That hour is already booked. Please pick another one — the free hours are selectable.",
     consent: "Without consent to process your data I cannot accept the request.",
     check: "Please check the highlighted fields.",
     tooMany:
