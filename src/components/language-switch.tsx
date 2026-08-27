@@ -2,10 +2,11 @@
 
 import { usePathname } from "next/navigation";
 import {
-  DEFAULT_LOCALE,
   LOCALES,
   LOCALE_SHORT,
   LOCALE_LABEL,
+  isLocale,
+  localePath,
   type Locale,
 } from "@/lib/i18n";
 
@@ -43,17 +44,23 @@ export function LanguageSwitch({
   /**
    * Той самий шлях іншою мовою.
    *
-   * `usePathname` у клієнті вже містить префікс `/en`, але для української
-   * віддає шлях без префікса — саме так, як його бачить відвідувач, бо
-   * українська підставляється rewrite'ом у proxy. Тому просто зрізаємо або
-   * додаємо `/en`, не намагаючись вгадати внутрішній сегмент `[lang]`.
+   * `usePathname` віддає РІЗНЕ на сервері й у клієнті, і це головна пастка
+   * цього компонента. Українські сторінки proxy підставляє rewrite'ом у
+   * `/uk/...`, і при серверному рендері хук бачить саме внутрішній шлях —
+   * `/uk/poslugy`, а не публічний `/poslugy`. Після гідратації той самий хук
+   * повертає вже адресу з рядка браузера.
+   *
+   * Тому спершу зрізаємо будь-який мовний сегмент на початку — і `/en`, і
+   * внутрішній `/uk`, — а вже потім будуємо адресу через `localePath`, який
+   * знає правило «українська без префікса, англійська під /en». Раніше
+   * зрізався лише `/en`, тож у розмітці, що приходила з сервера, перемикач
+   * вів на `/en/uk/poslugy` — неіснуючий шлях і 404. Клік до гідратації
+   * (а це найчастіший випадок на проді) потрапляв саме в нього.
    */
   const pathFor = (target: Locale) => {
-    const bare = pathname.startsWith("/en")
-      ? pathname.slice(3) || "/"
-      : pathname;
-    if (target === DEFAULT_LOCALE) return bare;
-    return bare === "/" ? "/en" : `/en${bare}`;
+    const [head, ...rest] = pathname.split("/").filter(Boolean);
+    const bare = isLocale(head ?? "") ? `/${rest.join("/")}` : pathname;
+    return localePath(target, bare === "/" || bare === "" ? "/" : bare);
   };
 
   /**
