@@ -116,9 +116,27 @@ export async function updatePaymentStatus(input: {
   status: PaymentStatus;
   failureReason?: string;
   errCode?: string;
-}): Promise<(PaymentRow & { justPaid: boolean }) | null> {
+  /**
+   * Скільки банк реально провів. `finalAmount`, якщо він є, інакше `amount`.
+   * Необов'язкове: старі виклики й тести без нього працюють як раніше.
+   */
+  paidAmount?: number;
+}): Promise<
+  (PaymentRow & { justPaid: boolean; amountMismatch: boolean }) | null
+> {
   const current = await getPaymentByInvoice(input.invoiceId);
   if (!current) return null;
+
+  // Розбіжність суми: банк провів не те, що ми виставили.
+  //
+  // При `paymentType: "debit"` цього статися не мало б, але «не мало б» —
+  // не привід мовчки показати майстрині нашу очікувану суму замість
+  // отриманої. Саме такі розбіжності банк і підсвічує при звірці, тож
+  // позначаємо їх явно, а не з'ясовуємо потім із виписки.
+  const amountMismatch =
+    isPaid(input.status) &&
+    input.paidAmount != null &&
+    input.paidAmount !== current.amount;
 
   // Чи це перехід в «оплачено» саме зараз. monobank повторює вебхук, доки не
   // отримає 200, тож без цієї ознаки кожен повтор виглядав би як нова оплата —
@@ -140,5 +158,5 @@ export async function updatePaymentStatus(input: {
     .single();
 
   if (error) throw new Error(`Не вдалося оновити рахунок: ${error.message}`);
-  return { ...data, justPaid };
+  return { ...data, justPaid, amountMismatch };
 }

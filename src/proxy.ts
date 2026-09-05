@@ -105,8 +105,14 @@ export const config = {
   /**
    * Виключаємо статику й службові шляхи ще на рівні matcher, а не лише в коді:
    * без цього proxy виконувався б на кожній картинці й кожному чанку JS.
+   *
+   * `payment` — не статика, а сторінка повернення з банку. Вона лежить поза
+   * сегментом [lang], бо адресу задає monobank у `redirectUrl` і мовного
+   * префікса там не буде ніколи. Без цього виключення proxy переписував її
+   * на /uk/payment/done, якого не існує, — і клієнтка бачила 404 одразу
+   * після оплати, тобто рівно в той момент, коли їй потрібне підтвердження.
    */
   matcher: [
-    "/((?!_next/static|_next/image|api|admin|images|icons|video|favicon.ico|sw.js).*)",
+    "/((?!_next/static|_next/image|api|admin|payment|images|icons|video|favicon.ico|sw.js).*)",
   ],
 };

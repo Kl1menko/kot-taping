@@ -25,3 +25,41 @@ function resolveSiteUrl(): string {
 }
 
 export const SITE_URL = resolveSiteUrl();
+
+/**
+ * Чи можна давати цю адресу банку.
+ *
+ * `SITE_URL` має відкат на localhost, щоб `next build` проходив без жодного
+ * .env, — і саме цей відкат один раз уже поїхав у продакшен: рахунки
+ * виставлялись із `webHookUrl: http://localhost:3000/...`, банк не міг
+ * достукатись, статуси назавжди лишались `created`, а гроші тим часом
+ * списувались. Помилка мовчазна за побудовою: в адмінці все виглядає
+ * справним, видно її лише з боку банку.
+ *
+ * Тому адресу, яка нікуди не веде ззовні, перевіряємо явно — до створення
+ * рахунку, а не після.
+ */
+export function isPubliclyReachable(url: string = SITE_URL): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  // http:// банк не прийме навіть на справжньому домені — вебхук лише https.
+  if (parsed.protocol !== "https:") return false;
+
+  const host = parsed.hostname;
+  if (host === "localhost" || host.endsWith(".localhost")) return false;
+  // Петля й посилання на себе: 127.0.0.0/8, ::1.
+  if (host === "::1" || /^127\./.test(host)) return false;
+  // Приватні діапазони — тунель назовні їх не замінює.
+  if (/^10\./.test(host)) return false;
+  if (/^192\.168\./.test(host)) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+  // Домен без крапки (`http://myserver`) назовні не резолвиться.
+  if (!host.includes(".")) return false;
+
+  return true;
+}

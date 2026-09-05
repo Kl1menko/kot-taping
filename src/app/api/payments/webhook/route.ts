@@ -63,11 +63,17 @@ export async function POST(req: Request) {
   }
 
   try {
+    // `finalAmount` — те, що банк реально провів; він відрізняється від
+    // `amount` при частковій оплаті чи частковому поверненні. Беремо його,
+    // коли він є, а не нашу очікувану суму: пуш має називати отримане.
+    const paidAmount = state.finalAmount ?? state.amount;
+
     const updated = await updatePaymentStatus({
       invoiceId: state.invoiceId,
       status: state.status,
       failureReason: state.failureReason,
       errCode: state.errCode,
+      paidAmount,
     });
 
     if (!updated) {
@@ -80,9 +86,20 @@ export async function POST(req: Request) {
       //
       // Помилку ковтаємо свідомо: гроші вже зараховані, і збій сповіщення не
       // має обертатись 500-ю у відповідь банку — та спричинила б нові повтори.
+      if (updated.amountMismatch) {
+        // Сума розійшлася — це не рядовий успіх, і мовчати про нього не можна:
+        // майстриня має побачити розбіжність зараз, а не при звірці з банком.
+        console.warn(
+          `[mono] рахунок ${state.invoiceId}: виставлено ${updated.amount}, ` +
+            `проведено ${paidAmount}`,
+        );
+      }
+
       await sendPush({
-        title: "Оплату отримано",
-        body: `${formatAmount(updated.amount)} — рахунок закрито.`,
+        title: updated.amountMismatch ? "Оплата з розбіжністю" : "Оплату отримано",
+        body: updated.amountMismatch
+          ? `Отримано ${formatAmount(paidAmount)} замість ${formatAmount(updated.amount)} — перевірте.`
+          : `${formatAmount(paidAmount)} — рахунок закрито.`,
         url: updated.kit_order_id ? "/admin/kits" : "/admin/calendar",
         tag: `payment-${updated.invoice_id}`,
       });

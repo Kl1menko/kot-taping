@@ -22,7 +22,7 @@ import {
 } from "@/lib/payments";
 import { paymentQrSvg } from "@/lib/qr";
 import type { PaymentRow } from "@/lib/db/types";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL, isPubliclyReachable } from "@/lib/site";
 
 /**
  * Виставлення рахунку з адмінки.
@@ -96,6 +96,26 @@ async function issue({
 }): Promise<InvoiceState> {
   const amountError = validateAmount(amountUah);
   if (amountError) return { status: "error", message: amountError };
+
+  // Адресу вебхука перевіряємо до банку, а не після.
+  //
+  // `SITE_URL` відкочується на localhost, щоб збірка проходила без .env, — і
+  // цей відкат уже одного разу поїхав у продакшен. Рахунок тоді створюється
+  // справжній, клієнтка його оплачує, а вебхук банку йде в нікуди: статус
+  // назавжди лишається «created», хоча гроші списані. Мовчазна помилка, яку
+  // з адмінки не видно взагалі.
+  //
+  // Краще не виставити рахунок, ніж виставити такий, про оплату якого ми
+  // ніколи не дізнаємось.
+  if (!isPubliclyReachable()) {
+    return {
+      status: "error",
+      message:
+        `Адреса сайту (${SITE_URL}) недоступна для банку, тож він не зможе ` +
+        "повідомити про оплату. Задайте NEXT_PUBLIC_SITE_URL — публічний " +
+        "https-домен — і передеплойте.",
+    };
+  }
 
   // Другий живий рахунок на ту саму послугу означав би два QR у клієнтки.
   const existing = await listPayments(target);
@@ -236,6 +256,9 @@ export async function refreshPaymentStatus(invoiceId: string): Promise<InvoiceSt
       status: state.status,
       failureReason: state.failureReason,
       errCode: state.errCode,
+      // Так само, як у вебхуку: звірка має ловити розбіжність суми, інакше
+      // вона знайшлася б лише через той шлях, який саме й не спрацював.
+      paidAmount: state.finalAmount ?? state.amount,
     });
   } catch (error) {
     return {
