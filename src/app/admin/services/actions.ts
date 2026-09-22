@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import { CATEGORIES } from "@/lib/services";
 import { LOCATIONS } from "@/lib/contacts";
+import { LOCALES } from "@/lib/i18n";
 import {
   deleteServiceImage,
   uploadServiceImage,
@@ -59,16 +60,20 @@ function slugify(value: string): string {
 function revalidateService(category?: string) {
   revalidatePath("/admin/services");
   revalidatePath("/admin/calendar");
-  revalidatePath("/");
-  revalidatePath("/poslugy");
+  // Українські публічні URL переписуються proxy на /uk/... . Next скидає
+  // кеш за шляхом призначення rewrite; / та /poslugy його не зачіпають.
+  for (const lang of LOCALES) {
+    revalidatePath(`/${lang}`);
+    revalidatePath(`/${lang}/poslugy`);
 
-  const categories = category ? [category] : CATEGORY_IDS;
-  for (const id of categories) {
-    revalidatePath(`/poslugy/${id}`);
-  }
+    const categories = category ? [category] : CATEGORY_IDS;
+    for (const id of categories) {
+      revalidatePath(`/${lang}/poslugy/${id}`);
+    }
 
-  for (const place of LOCATIONS) {
-    revalidatePath(`/mistsya/${place.slug}`);
+    for (const place of LOCATIONS) {
+      revalidatePath(`/${lang}/mistsya/${place.slug}`);
+    }
   }
 }
 
@@ -165,13 +170,14 @@ export async function saveService(
 
   const picked =
     input.image instanceof File && input.image.size > 0 ? input.image : null;
+  let categoryChanged = false;
 
   if (input.id) {
     // Slug не чіпаємо при редагуванні: на нього посилаються заявки, і зміна
     // осиротила б їх — назву послуги в них перестало б видно.
     const { data: current, error: readError } = await db()
       .from("services")
-      .select("slug, image_url")
+      .select("slug, image_url, category")
       .eq("id", input.id)
       .maybeSingle();
 
@@ -216,6 +222,8 @@ export async function saveService(
       if (picked && imageUrl) await deleteServiceImage(imageUrl);
       return { status: "error", message: `Не вдалося зберегти: ${error.message}` };
     }
+
+    categoryChanged = current.category !== input.category;
 
     // Старий знімок прибираємо лише після успішного запису: доти на нього
     // ще посилається рядок у базі, і видалення дало б порожню картку.
@@ -281,7 +289,7 @@ export async function saveService(
     }
   }
 
-  revalidateService(input.category);
+  revalidateService(categoryChanged ? undefined : input.category);
 
   return {
     status: "success",
