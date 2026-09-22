@@ -43,6 +43,11 @@ const supabaseHost = (() => {
 })();
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Браузер стискає оригінал до 15 МБ перед надсиланням до менш ніж 4 МБ.
+    // Запас тут покриває multipart; Vercel окремо обмежує весь запит до 4,5 МБ.
+    serverActions: { bodySizeLimit: "6mb" },
+  },
   images: {
     // AVIF перший: на фото він дає помітно менший файл за WebP при тій самій
     // якості. Браузер, який його не вміє, отримає WebP — Next віддає за

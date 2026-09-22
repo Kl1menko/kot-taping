@@ -18,6 +18,34 @@ import { Button, Chip, EmptyState, formatMoney } from "./ui";
 import { INPUT_CLS } from "@/lib/form";
 
 const INITIAL: ServiceState = { status: "idle" };
+const MAX_ORIGINAL_BYTES = 15 * 1024 * 1024;
+const MAX_ACTION_FILE_BYTES = 4 * 1024 * 1024;
+
+async function prepareServiceImage(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 1200 / bitmap.width);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Не вдалося обробити фото.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/webp", 0.82),
+    );
+    if (!blob || blob.type !== "image/webp" || blob.size > MAX_ACTION_FILE_BYTES) {
+      throw new Error("Не вдалося зменшити фото для завантаження.");
+    }
+
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, {
+      type: "image/webp",
+    });
+  } finally {
+    bitmap.close();
+  }
+}
 
 
 export function ServicesScreen({ services }: { services: ServiceRow[] }) {
@@ -230,11 +258,19 @@ function ServiceRowItem({
   );
 }
 
-function Submit({ editing }: { editing: boolean }) {
+function Submit({
+  editing,
+  preparingImage,
+  imageInvalid,
+}: {
+  editing: boolean;
+  preparingImage: boolean;
+  imageInvalid: boolean;
+}) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} full>
-      {pending ? "Зберігаю…" : editing ? "Зберегти" : "Створити послугу"}
+    <Button type="submit" disabled={pending || preparingImage || imageInvalid} full>
+      {preparingImage ? "Готую фото…" : pending ? "Зберігаю…" : editing ? "Зберегти" : "Створити послугу"}
     </Button>
   );
 }
@@ -243,7 +279,7 @@ function Submit({ editing }: { editing: boolean }) {
  * Фото картки — вибір файлу з попереднім переглядом.
  *
  * Прев'ю робимо через `URL.createObjectURL`, а не читанням у base64: файл до
- * 5 МБ, і тримати його ще й рядком у стані означало б потроїти пам'ять на
+ * 15 МБ, і тримати його ще й рядком у стані означало б потроїти пам'ять на
  * телефоні. Об'єкт-URL звільняємо на зміні файла й на розмонтуванні —
  * інакше кожен перевибір лишав би копію знімка в пам'яті вкладки.
  *
@@ -254,13 +290,19 @@ function Submit({ editing }: { editing: boolean }) {
 function ImageField({
   current,
   error,
+  onPreparingChange,
+  onInvalidChange,
 }: {
   current: string | null;
   error?: string;
+  onPreparingChange: (preparing: boolean) => void;
+  onInvalidChange: (invalid: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectionRef = useRef(0);
   const [preview, setPreview] = useState<string | null>(null);
   const [removed, setRemoved] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -268,7 +310,21 @@ function ImageField({
     };
   }, [preview]);
 
-  const pick = (file: File | null) => {
+  const pick = async (file: File | null) => {
+    const selection = ++selectionRef.current;
+    onPreparingChange(false);
+    if (file && file.size > MAX_ORIGINAL_BYTES) {
+      onInvalidChange(true);
+      if (inputRef.current) inputRef.current.value = "";
+      setPreview((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+      setFileError("Файл завеликий — максимум 15 МБ.");
+      return;
+    }
+    setFileError(null);
+    onInvalidChange(false);
     setPreview((old) => {
       if (old) URL.revokeObjectURL(old);
       return file ? URL.createObjectURL(file) : null;
@@ -276,11 +332,33 @@ function ImageField({
     // Вибрали нове фото — «прибрати» скасовується само: обидва разом
     // означали б суперечливу вимогу.
     if (file) setRemoved(false);
+
+    if (!file || file.size <= MAX_ACTION_FILE_BYTES) return;
+
+    onPreparingChange(true);
+    try {
+      const prepared = await prepareServiceImage(file);
+      if (selection !== selectionRef.current || !inputRef.current) return;
+      const files = new DataTransfer();
+      files.items.add(prepared);
+      inputRef.current.files = files.files;
+    } catch {
+      if (selection !== selectionRef.current) return;
+      if (inputRef.current) inputRef.current.value = "";
+      setPreview((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+      setFileError("Не вдалося підготувати фото. Спробуйте інший файл.");
+      onInvalidChange(true);
+    } finally {
+      if (selection === selectionRef.current) onPreparingChange(false);
+    }
   };
 
   const clear = () => {
     if (inputRef.current) inputRef.current.value = "";
-    pick(null);
+    void pick(null);
     setRemoved(Boolean(current));
   };
 
@@ -317,12 +395,12 @@ function ImageField({
             name="image"
             type="file"
             accept="image/jpeg,image/png,image/webp,image/avif"
-            onChange={(e) => pick(e.target.files?.[0] ?? null)}
+             onChange={(e) => { void pick(e.target.files?.[0] ?? null); }}
             className="block w-full text-[14px] text-ink-muted file:mr-3 file:min-h-[44px] file:cursor-pointer file:rounded-full file:border file:border-[#d4d4d4] file:bg-transparent file:px-4 file:text-[14px] file:text-ink hover:file:border-ink"
           />
 
           <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
-            JPG, PNG, WebP або AVIF, до 5 МБ. Найкраще — вертикальний знімок.
+             JPG, PNG, WebP або AVIF, до 15 МБ. Великі фото зменшуються перед надсиланням. Найкраще — вертикальний знімок.
             Без свого фото картка показує спільне фото категорії.
           </p>
 
@@ -342,9 +420,9 @@ function ImageField({
         <input type="hidden" name="removeImage" value="on" />
       )}
 
-      {error && (
+      {(fileError || error) && (
         <span role="alert" className="mt-1.5 block text-[13px] text-[#b3261e]">
-          {error}
+          {fileError || error}
         </span>
       )}
     </div>
@@ -360,6 +438,8 @@ function ServiceForm({
 }) {
   const [state, action] = useActionState(saveService, INITIAL);
   const [pending, startTransition] = useTransition();
+  const [preparingImage, setPreparingImage] = useState(false);
+  const [imageInvalid, setImageInvalid] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -396,7 +476,14 @@ function ServiceForm({
   };
 
   return (
-    <form action={action} noValidate className="space-y-5">
+    <form
+      action={action}
+      noValidate
+      onSubmit={(event) => {
+        if (preparingImage || imageInvalid) event.preventDefault();
+      }}
+      className="space-y-5"
+    >
       {service && <input type="hidden" name="id" value={service.id} />}
 
       <label className="block">
@@ -588,6 +675,8 @@ function ServiceForm({
       <ImageField
         current={service?.image_url ?? null}
         error={state.fieldErrors?.image}
+        onPreparingChange={setPreparingImage}
+        onInvalidChange={setImageInvalid}
       />
 
       <label className="flex cursor-pointer items-center gap-2.5 text-[15px]">
@@ -607,7 +696,7 @@ function ServiceForm({
       )}
 
       <div className="space-y-2 pt-1">
-        <Submit editing={Boolean(service)} />
+        <Submit editing={Boolean(service)} preparingImage={preparingImage} imageInvalid={imageInvalid} />
 
         {service && (
           <Button tone="light" onClick={toggle} disabled={pending} full>
